@@ -24,17 +24,19 @@ import baritone.api.command.argument.IArgConsumer;
 import baritone.api.command.datatypes.EntityClassById;
 import baritone.api.command.datatypes.IDatatypeFor;
 import baritone.api.command.datatypes.NearbyPlayer;
+import baritone.api.command.exception.CommandErrorMessageException;
 import baritone.api.command.exception.CommandException;
 import baritone.api.command.helpers.TabCompleteHelper;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.EntityList;
-import net.minecraft.entity.EntityLiving;
-import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.util.ResourceLocation;
-
 import java.util.*;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
+import net.minecraft.core.Registry;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.player.Player;
 
 public class FollowCommand extends Command {
 
@@ -48,7 +50,7 @@ public class FollowCommand extends Command {
         FollowGroup group;
         FollowList list;
         List<Entity> entities = new ArrayList<>();
-        List<Class<? extends Entity>> classes = new ArrayList<>();
+        List<EntityType> classes = new ArrayList<>();
         if (args.hasExactlyOne()) {
             baritone.getFollowProcess().follow((group = args.getEnum(FollowGroup.class)).filter);
         } else {
@@ -57,30 +59,33 @@ public class FollowCommand extends Command {
             list = args.getEnum(FollowList.class);
             while (args.hasAny()) {
                 Object gotten = args.getDatatypeFor(list.datatype);
-                if (gotten instanceof Class) {
+                if (gotten instanceof EntityType) {
                     //noinspection unchecked
-                    classes.add((Class<? extends Entity>) gotten);
-                } else {
+                    classes.add((EntityType) gotten);
+                } else if (gotten != null) {
                     entities.add((Entity) gotten);
                 }
             }
+
             baritone.getFollowProcess().follow(
                     classes.isEmpty()
                             ? entities::contains
-                            : e -> classes.stream().anyMatch(c -> c.isInstance(e))
+                            : e -> classes.stream().anyMatch(c -> e.getType().equals(c))
             );
         }
         if (group != null) {
             logDirect(String.format("Following all %s", group.name().toLowerCase(Locale.US)));
         } else {
-            logDirect("Following these types of entities:");
             if (classes.isEmpty()) {
+                if (entities.isEmpty()) throw new NoEntitiesException();
+                logDirect("Following these entities:");
                 entities.stream()
                         .map(Entity::toString)
                         .forEach(this::logDirect);
             } else {
+                logDirect("Following these types of entities:");
                 classes.stream()
-                        .map(EntityList::getKey)
+                        .map(BuiltInRegistries.ENTITY_TYPE::getKey)
                         .map(Objects::requireNonNull)
                         .map(ResourceLocation::toString)
                         .forEach(this::logDirect);
@@ -133,8 +138,8 @@ public class FollowCommand extends Command {
 
     @KeepName
     private enum FollowGroup {
-        ENTITIES(EntityLiving.class::isInstance),
-        PLAYERS(EntityPlayer.class::isInstance); /* ,
+        ENTITIES(LivingEntity.class::isInstance),
+        PLAYERS(Player.class::isInstance); /* ,
         FRIENDLY(entity -> entity.getAttackTarget() != HELPER.mc.player),
         HOSTILE(FRIENDLY.filter.negate()); */
         final Predicate<Entity> filter;
@@ -154,5 +159,13 @@ public class FollowCommand extends Command {
         FollowList(IDatatypeFor datatype) {
             this.datatype = datatype;
         }
+    }
+
+    public static class NoEntitiesException extends CommandErrorMessageException {
+
+        protected NoEntitiesException() {
+            super("No valid entities in range!");
+        }
+
     }
 }

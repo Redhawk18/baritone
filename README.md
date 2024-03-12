@@ -100,7 +100,7 @@ Here are some links to help to get started:
 
 ## Stars over time
 
-[![Stargazers over time](https://starchart.cc/cabaletta/baritone.svg)](https://starchart.cc/cabaletta/baritone)
+[![Stargazers over time](https://starchart.cc/Mankool0/baritone.svg)](https://starchart.cc/Mankool0/baritone)
 
 # API
 
@@ -118,25 +118,27 @@ BaritoneAPI.getProvider().getPrimaryBaritone().getCustomGoalProcess().setGoalAnd
 ```
 
 # FAQ
+## New Commands
+```mapbuild``` Uses all the new logic programmed
+* A schematica schematic has to be placed for this command to work (mapmatica works aswell)
+* make sure material shulkers are placed with gaps inbetween every 3-4 shulkers
 
-## Can I use Baritone as a library in my custom utility client?
+```mapstop```
+* stops baritone
 
-That's what it's for, sure! (As long as usage complies with the LGPL 3.0 License)
+## Recommend default settings
+Mileage may vary, but these are what I have found to work the best for me
+```
+allowInventory true
+assumeWalkOnWater true
+acceptableThrowawayItems minecraft:dirt,minecraft:cobblestone,minecraft:stone
+blocksToAvoidBreaking crafting_table,furnace,lit_furnace,chest,trapped_chest,standing_sign,wall_sign,white_shulker_box,orange_shulker_box,magenta_shulker_box,light_blue_shulker_box,yellow_shulker_box,lime_shulker_box,pink_shulker_box,gray_shulker_box,silver_shulker_box,cyan_shulker_box,purple_shulker_box,blue_shulker_box,brown_shulker_box,green_shulker_box,red_shulker_box,black_shulker_box
+blockReachDistance 3.8
+failureTimeoutMS 2000
+useSwordToMine false
+```
 
 ## How is it so fast?
 
-Magic. (Hours of [leijurv](https://github.com/leijurv/) enduring excruciating pain)
+Magic. (Hours of [Mankool's](https://github.com/Mankool0/) enduring excruciating bug fixing, and [Redhawk's](https://github.com/Redhawk18/) endless hours of testing)
 
-### Additional Special Thanks To:
-
-![YourKit-Logo](https://www.yourkit.com/images/yklogo.png)
-
-YourKit supports open source projects with innovative and intelligent tools for monitoring and profiling Java and .NET applications.
-
-YourKit is the creator of the [YourKit Java Profiler](https://www.yourkit.com/java/profiler/), [YourKit .NET Profiler](https://www.yourkit.com/.net/profiler/), and [YourKit YouMonitor](https://www.yourkit.com/youmonitor/).
-
-We thank them for granting Baritone an OSS license so that we can make our software the best it can be.
-
-## Why is it called Baritone?
-
-It's named for FitMC's deep sultry voice.

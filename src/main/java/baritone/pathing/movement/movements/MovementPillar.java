@@ -68,7 +68,7 @@ public class MovementPillar extends Movement {
         boolean ladder = from == Blocks.LADDER || from == Blocks.VINE;
         BlockState fromDown = context.get(x, y - 1, z);
         if (!ladder) {
-            if (fromDown.getBlock() == Blocks.LADDER || fromDown.getBlock() == Blocks.VINE) {
+            if (fromDown.getBlock() == Blocks.LADDER || fromDown.getBlock() == Blocks.VINE || fromDown.getBlock() == Blocks.CARPET) {
                 return COST_INF; // can't pillar from a ladder or vine onto something that isn't also climbable
             }
             if (fromDown.getBlock() instanceof SlabBlock && fromDown.getValue(SlabBlock.TYPE) == SlabType.BOTTOM) {

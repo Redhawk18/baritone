@@ -65,6 +65,7 @@ public class Baritone implements IBaritone {
     private final Path directory;
 
     private final GameEventHandler gameEventHandler;
+    private MapBuilderBehavior mapBuilderBehavior;
 
     private final PathingBehavior pathingBehavior;
     private final LookBehavior lookBehavior;
@@ -110,6 +111,8 @@ public class Baritone implements IBaritone {
             this.inventoryBehavior    = this.registerBehavior(InventoryBehavior::new);
             this.inputOverrideHandler = this.registerBehavior(InputOverrideHandler::new);
             this.registerBehavior(WaypointBehavior::new);
+            mapBuilderBehavior = new MapBuilderBehavior(this);
+
         }
 
         this.pathingControlManager = new PathingControlManager(this);
@@ -191,6 +194,10 @@ public class Baritone implements IBaritone {
         return this.lookBehavior;
     }
 
+    @Override
+    public MapBuilderBehavior getMapBuilderBehavior() {
+        return this.mapBuilderBehavior;
+    }
     @Override
     public ExploreProcess getExploreProcess() {
         return this.exploreProcess;

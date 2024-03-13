@@ -30,24 +30,26 @@ import baritone.api.utils.RotationUtils;
 import baritone.api.utils.input.Input;
 import baritone.utils.schematic.MapArtSchematic;
 import baritone.utils.schematic.schematica.SchematicaHelper;
-import net.minecraft.block.*;
-import net.minecraft.block.state.IBlockState;
+
+import net.minecraft.client.Minecraft;
+import net.minecraft.world.item.*;
+import net.minecraft.world.level.block.*;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.client.gui.inventory.GuiChest;
 import net.minecraft.client.gui.inventory.GuiShulkerBox;
-import net.minecraft.init.Blocks;
-import net.minecraft.init.Items;
-import net.minecraft.inventory.ClickType;
+// import net.minecraft.init.Blocks;
+// import net.minecraft.init.Items;
+import net.minecraft.world.inventory.ClickType;
 import net.minecraft.inventory.Container;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemAir;
-import net.minecraft.item.ItemBlock;
-import net.minecraft.item.ItemStack;
+import net.minecraft.world.inventory.ContainerData;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.tileentity.TileEntityShulkerBox;
-import net.minecraft.util.EnumFacing;
+import net.minecraft.core.Direction;
 import net.minecraft.util.Tuple;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Vec3i;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Vec3i;
+import net.minecraft.world.level.block.AirBlock;
+import net.minecraft.
 
 import java.util.*;
 
@@ -75,13 +77,13 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
     private BetterBlockPos pathBackLoc = null;
 
     //material/block variables
-    private List<IBlockState> allBlocks = new LinkedList<>();
+    private List<BlockState> allBlocks = new LinkedList<>();
     private boolean cursorStackNonEmpty = false;
 
-    private IBlockState closestNeededBlock;
+    private BlockState closestNeededBlock;
     private int stacksToLoot = 0;
 
-    private IBlockState mostCommonBlock; //holds the most common block in the schematic
+    private BlockState mostCommonBlock; //holds the most common block in the schematic
     private int amountOfMostCommonBlock = -1;
 
 
@@ -117,9 +119,9 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
         if (SchematicaHelper.isSchematicaPresent()) {
             Optional<Tuple<IStaticSchematic, BlockPos>> schematic = SchematicaHelper.getOpenSchematic();
             if (schematic.isPresent()) {
-                IStaticSchematic s = schematic.get().getFirst();
-                schematicName = schematic.get().getFirst().toString();
-                schematicOrigin = schematic.get().getSecond();
+                IStaticSchematic s = schematic.get().getA();
+                schematicName = schematic.get().getA().toString();
+                schematicOrigin = schematic.get().getB();
                 if (Baritone.settings().mapArtMode.value) {
                     this.schematic = new MapArtSchematic(s);
                 } else {
@@ -173,7 +175,7 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
 
     @Override
     public void onTick(TickEvent event) {
-        if (paused || schematic == null || Helper.mc.player == null || Helper.mc.player.inventory.isEmpty()) {
+        if (paused || schematic == null || Helper.mc.player == null || Helper.mc.player.getInventory().isEmpty()) {
             return;
         }
 
@@ -186,7 +188,7 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
                 timer = 0;
 
 
-                int emptySlot = getItemSlot(Item.getIdFromItem(Items.AIR));
+                int emptySlot = getItemSlot(Item.getId(Items.AIR));
                 if (emptySlot != -1) {
                     Helper.HELPER.logDirect("Had " + Helper.mc.player.inventory.getItemStack().getDisplayName() + " on our cursor. Trying to place into slot " + emptySlot);
 
@@ -238,7 +240,7 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
 
                 if (baritone.getBuilderProcess().isActive() && !baritone.getBuilderProcess().isPaused() && timer >= 800) {
                     if (Helper.mc.currentScreen instanceof GuiChest) {
-                        ctx.player().closeScreen(); // Close chest gui so we can actually build
+                        ctx.player().closeContainer(); // Close chest gui so we can actually build
                         timer = 0;
                         return;
                     }
@@ -343,10 +345,10 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
                         shulkerInfo.checked = true;
                         shulkerInfo.contents = getOpenShulkerContents();
                         if (shulkerInfo.contents != null) {
-                            for (ItemStack itemStack : shulkerInfo.contents) {
+                            for (ItemStack ItemStack : shulkerInfo.contents) {
 
-                                IBlockState state = ((ItemBlock) itemStack.getItem()).getBlock().getStateForPlacement(ctx.world(), ctx.playerFeet(), EnumFacing.UP, (float) ctx.player().posX, (float) ctx.player().posY, (float) ctx.player().posZ, itemStack.getItem().getMetadata(itemStack.getMetadata()), ctx.player());
-                                if (!allBlocks.contains(state) && !(state.getBlock() instanceof BlockAir)) {
+                                BlockState state = ((BlockItem) ItemStack.getItem()).getBlock().getStateForPlacement(ctx.world(), ctx.playerFeet(), Direction.UP, (float) ctx.player().position().x, (float) ctx.player().position().y, (float) ctx.player().position().z, ItemStack.getItem().getMetadata(ItemStack.getMetadata()), ctx.player());
+                                if (!allBlocks.contains(state) && !(state.getBlock() instanceof AirBlock)) {
                                     allBlocks.add(state);
                                 }
                             }
@@ -356,7 +358,7 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
                 }
 
                 currentState = State.ShulkerSearchPathing;
-                ctx.player().closeScreen();
+                ctx.player().closeContainer();
                 timer = 0;
                 break;
             }
@@ -364,7 +366,7 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
             case SchematicScanning: {
                 closestNeededBlock = findNeededBlockNew();
 
-                if (closestNeededBlock == null || closestNeededBlock.getBlock() instanceof BlockAir) {
+                if (closestNeededBlock == null || closestNeededBlock.getBlock() instanceof AirBlock) {
                     // We probably have everything we need, but baritone is just being retarded
                     // So we have to manually walk back to our building spot
                     Helper.HELPER.logDirect("Have what we need trying to force path back");
@@ -377,7 +379,7 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
 
                 //finds how many stacks of already chosen block are needed
                 int stacksNeeded = stacksOfBlockNeededSchematic(closestNeededBlock);
-                int airSlots = getItemStackCountInventory(Blocks.AIR.getDefaultState());
+                int airSlots = getItemStackCountInventory(Blocks.AIR.defaultBlockState());
                 if (isSingleBlockBuild()) {
                     stacksToLoot = Math.min(stacksNeeded, airSlots);
                 } else {
@@ -394,17 +396,17 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
                 for (ShulkerInfo curShulker : shulkerList) {
                     for (ItemStack stack : curShulker.contents) {
                         //Gets the block state since you can't use block ids due to blocks having same ids but are different
-                        IBlockState state =
-                                ((ItemBlock) stack.getItem()).getBlock().getStateForPlacement(ctx.world(),
+                        BlockState state =
+                                ((BlockItem) stack.getItem()).getBlock().getStateForPlacement(ctx.world(),
                                 ctx.playerFeet(),
-                                EnumFacing.UP,
-                                (float) ctx.player().posX, (float) ctx.player().posY,
-                                (float) ctx.player().posZ, stack.getItem().getMetadata(stack.getMetadata()),
+                                Direction.UP,
+                                (float) ctx.player().position().x, (float) ctx.player().position().y,
+                                (float) ctx.player().position().z, stack.getItem().getMetadata(stack.getMetadata()),
                                 ctx.player());
 
                         // Torches can be placed in diff facing directions so we need this
-                        if (closestNeededBlock.getBlock() instanceof BlockTorch) {
-                            if (((ItemBlock) stack.getItem()).getBlock().equals(closestNeededBlock.getBlock())) {
+                        if (closestNeededBlock.getBlock() instanceof TorchBlock) {
+                            if (((BlockItem) stack.getItem()).getBlock().equals(closestNeededBlock.getBlock())) {
                                 curCheckingShulker = curShulker.pos;
                             }
                         } else {
@@ -488,7 +490,7 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
                 if (getItemStackCountInventory(closestNeededBlock) >= stacksToLoot) {
                     // Have what we need
                     timer = 0;
-                    ctx.player().closeScreen();
+                    ctx.player().closeContainer();
                     currentState = State.Nothing;
                     return;
                 }
@@ -496,7 +498,7 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
                 if (getChestSlotCount(closestNeededBlock) == 0) {
                     // Shulker doesn't have what we need, did we accidentally open the wrong one?
                     timer = 0;
-                    ctx.player().closeScreen();
+                    ctx.player().closeContainer();
                     currentState = State.PathingToShulker;
                     return;
                 }
@@ -504,25 +506,25 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
 
 
                 // Loot shulker and update it's contents
-                IBlockState itemLooted = lootItemChestSlot(closestNeededBlock);
+                BlockState itemLooted = lootItemChestSlot(closestNeededBlock);
                 for (ShulkerInfo curShulker : shulkerList) {
                     if (curShulker.pos.equals(curCheckingShulker)) {
                         curShulker.contents = getOpenShulkerContents(); // Update the shulker contents
                         if (curShulker.contents == null || curShulker.contents.isEmpty()) {
                             Helper.HELPER.logDirect("Shulker no longer has items. Finishing looting early");
-                            ctx.player().closeScreen();
+                            ctx.player().closeContainer();
                             currentState = State.Nothing;
                         }
                         /*
                         // Shulker we are looting
                         for (ItemStack curStack : curShulker.contents) {
-                            IBlockState state = ((ItemBlock) curStack.getItem()).getBlock().getStateForPlacement(ctx.world(), ctx.playerFeet(), EnumFacing.UP, (float) ctx.player().posX, (float) ctx.player().posY, (float) ctx.player().posZ, curStack.getItem().getMetadata(curStack.getMetadata()), ctx.player());
+                            BlockState state = ((BlockItem) curStack.getItem()).getBlock().getStateForPlacement(ctx.world(), ctx.playerFeet(), Direction.UP, (float) ctx.player().position().x, (float) ctx.player().position().y, (float) ctx.player().position().z, curStack.getItem().getMetadata(curStack.getMetadata()), ctx.player());
                             if (state.equals(closestNeededBlock)) {
                                 curShulker.contents.remove(curStack);
                                 break;
                             }
                         }
-                        if (!itemLooted.equals(Blocks.AIR.getDefaultState())) {
+                        if (!itemLooted.equals(Blocks.AIR.defaultBlockState())) {
                             // Swapped with some inventory block so update the shulker list with that
                             // TODO : FIX THIS :D
                             //curShulker.contents.add(itemLooted);
@@ -559,11 +561,11 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
     }
 
     private boolean isSingleBlockBuild() {
-        IBlockState firstState = null;
+        BlockState firstState = null;
         for (ShulkerInfo curShulker : shulkerList) {
             for (ItemStack stack : curShulker.contents) {
-                if (stack.getItem() instanceof ItemBlock) {
-                    IBlockState state = ((ItemBlock) stack.getItem()).getBlock().getStateForPlacement(ctx.world(), ctx.playerFeet(), EnumFacing.UP, (float) ctx.player().posX, (float) ctx.player().posY, (float) ctx.player().posZ, stack.getItem().getMetadata(stack.getMetadata()), ctx.player());
+                if (stack.getItem() instanceof BlockItem) {
+                    BlockState state = ((BlockItem) stack.getItem()).getBlock().getStateForPlacement(ctx.world(), ctx.playerFeet(), Direction.UP, (float) ctx.player().position().x, (float) ctx.player().position().y, (float) ctx.player().position().z, stack.getItem().getMetadata(stack.getMetadata()), ctx.player());
                     if (firstState == null) {
                         firstState = state;
                     } else if (!firstState.equals(state)) {
@@ -581,7 +583,7 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
         Helper.HELPER.logDirect("Found " + set.size() + " invalid locations.");
         for (BlockPos pos : set) {
             // If invalid block we are checking isn't loaded or we don't have any of it in our inventory just skip
-            if (!Helper.mc.world.isBlockLoaded(pos, false) || Helper.mc.world.getBlockState(pos).getBlock() instanceof BlockAir || getItemStackCountInventory(Helper.mc.world.getBlockState(pos)) == 0) {
+            if (!Helper.mc.world.isBlockLoaded(pos, false) || Helper.mc.world.getBlockState(pos).getBlock() instanceof AirBlock || getItemStackCountInventory(Helper.mc.world.getBlockState(pos)) == 0) {
                 continue;
             }
             List<BlockPos> validSideBlocks = new LinkedList<>();
@@ -591,9 +593,9 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
                     if (Helper.mc.world.isBlockLoaded(curBlockPos, false)) { // check if its in render distance, not if its in cache
                         Block sideBlock = Helper.mc.world.getBlockState(curBlockPos).getBlock();
                         // Make sure side block isn't air, water, or web
-                        if (!(sideBlock instanceof BlockAir) && !(sideBlock instanceof BlockLiquid) && !(sideBlock instanceof BlockWeb)) {
+                        if (!(sideBlock instanceof AirBlock) && !(sideBlock instanceof LiquidBlock) && !(sideBlock instanceof WebBlock)) {
                             // We can stand here
-                            if (sideBlock instanceof BlockCarpet) {
+                            if (sideBlock instanceof CarpetBlock) {
                                 validSideBlocks.add(curBlockPos);
                             } else {
                                 validSideBlocks.add(curBlockPos.add(0, 1, 0)); // Add one height so we can stand
@@ -650,7 +652,7 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
                     int blockY = y + schematicOrigin.getY();
                     int blockZ = z + schematicOrigin.getZ();
                     BlockPos curBlockPos = new BlockPos(blockX, blockY, blockZ);
-                    IBlockState current = Helper.mc.world.getBlockState(curBlockPos);
+                    BlockState current = Helper.mc.world.getBlockState(curBlockPos);
                     if (!schematic.inSchematic(x, y, z, current)) {
                         continue;
                     }
@@ -666,14 +668,14 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
         return invalidPos;
     }
 
-    private int getChestSlotCount(IBlockState item) {
+    private int getChestSlotCount(BlockState item) {
         int count = 0;
         Container curContainer = Helper.mc.player.openContainer;
         for (int i = 0; i < 27; i++) {
-            if (!(curContainer.getSlot(i).getStack().getItem() instanceof ItemBlock)) {
+            if (!(curContainer.getSlot(i).getStack().getItem() instanceof BlockItem)) {
                 continue;
             }
-            IBlockState state = ((ItemBlock) curContainer.getSlot(i).getStack().getItem()).getBlock().getStateForPlacement(ctx.world(), ctx.playerFeet(), EnumFacing.UP, (float) ctx.player().posX, (float) ctx.player().posY, (float) ctx.player().posZ, curContainer.getSlot(i).getStack().getItem().getMetadata(curContainer.getSlot(i).getStack().getMetadata()), ctx.player());
+            BlockState state = ((BlockItem) curContainer.getSlot(i).getStack().getItem()).getBlock().getStateForPlacement(ctx.world(), ctx.playerFeet(), Direction.UP, (float) ctx.player().position().x, (float) ctx.player().position().y, (float) ctx.player().position().z, curContainer.getSlot(i).getStack().getItem().getMetadata(curContainer.getSlot(i).getStack().getMetadata()), ctx.player());
             if (state.equals(item)) {
                 count++;
             }
@@ -684,38 +686,38 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
     // Returns the item that was in our inventory before looting
     // So if we loot into air slot then it's an Air item
     // Otherwise it's the item that got swapped into the chest
-    private IBlockState lootItemChestSlot(IBlockState itemLoot) {
+    private BlockState lootItemChestSlot(BlockState itemLoot) {
         Container curContainer = Helper.mc.player.openContainer;
         for (int i = 0; i < 27; i++) { //loops through all slots in shulker box
             //checks to see if there are problem items within shulker
-            if (curContainer.getSlot(i).getStack().getItem() instanceof ItemAir || //empty slots
-                    !(curContainer.getSlot(i).getStack().getItem() instanceof ItemBlock)) { //non-blocks
+            if (curContainer.getSlot(i).getStack().getItem() instanceof AirItem || //empty slots
+                    !(curContainer.getSlot(i).getStack().getItem() instanceof BlockItem)) { //non-blocks
                 continue;
             }
 
-            IBlockState swappedItem = Blocks.AIR.getDefaultState();
-            IBlockState state =
-                        ((ItemBlock) curContainer.getSlot(i).getStack().getItem()).getBlock().getStateForPlacement(ctx.world(),
+            BlockState swappedItem = Blocks.AIR.defaultBlockState();
+            BlockState state =
+                        ((BlockItem) curContainer.getSlot(i).getStack().getItem()).getBlock().getStateForPlacement(ctx.world(),
                         ctx.playerFeet(),
-                        EnumFacing.UP,
-                        (float) ctx.player().posX,
-                        (float) ctx.player().posY,
-                        (float) ctx.player().posZ,
+                        Direction.UP,
+                        (float) ctx.player().position().x,
+                        (float) ctx.player().position().y,
+                        (float) ctx.player().position().z,
                         curContainer.getSlot(i).getStack().getItem().getMetadata(curContainer.getSlot(i).getStack().getMetadata()),
                         ctx.player());
 
             if (state.equals(itemLoot)) {
                 int swapSlot = getRandomBlockIdSlot();
 
-                if (getItemStackCountInventory(itemLoot) == 0 && getItemSlot(Item.getIdFromItem(Items.AIR)) == -1) {
+                if (getItemStackCountInventory(itemLoot) == 0 && getItemSlot(Item.getId(Items.AIR)) == -1) {
                     // We have no needed items and no air slots so we have to swap
                     if (swapSlot == 8) {
                         swapSlot = getRandomBlockIdSlotNoHotbar();
                         if (swapSlot == -1) {
-                            return Blocks.AIR.getDefaultState();
+                            return Blocks.AIR.defaultBlockState();
                         }
                     }
-                    swappedItem = ((ItemBlock) ctx.player().inventory.mainInventory.get(swapSlot).getItem()).getBlock().getStateForPlacement(ctx.world(), ctx.playerFeet(), EnumFacing.UP, (float) ctx.player().posX, (float) ctx.player().posY, (float) ctx.player().posZ, ctx.player().inventory.mainInventory.get(swapSlot).getItem().getMetadata(ctx.player().inventory.mainInventory.get(swapSlot).getMetadata()), ctx.player());
+                    swappedItem = ((BlockItem) ctx.player().inventory.mainInventory.get(swapSlot).getItem()).getBlock().getStateForPlacement(ctx.world(), ctx.playerFeet(), Direction.UP, (float) ctx.player().position().x, (float) ctx.player().position().y, (float) ctx.player().position().z, ctx.player().inventory.mainInventory.get(swapSlot).getItem().getMetadata(ctx.player().inventory.mainInventory.get(swapSlot).getMetadata()), ctx.player());
                     ctx.playerController().windowClick(curContainer.windowId, i, 0, ClickType.PICKUP, ctx.player()); // Pickup from chest
                     ctx.playerController().windowClick(curContainer.windowId, swapSlot < 9 ? swapSlot + 54 : swapSlot + 18, 0, ClickType.PICKUP, ctx.player()); // Have to convert slot id to single chest slot id
                     ctx.playerController().windowClick(curContainer.windowId, i, 0, ClickType.PICKUP, ctx.player()); // Place back into chest
@@ -729,13 +731,13 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
             } //watch out if state is still null and not assigned a new value
         }
 
-        return Blocks.AIR.getDefaultState();
+        return Blocks.AIR.defaultBlockState();
     }
 
     private int getRandomBlockIdSlotNoHotbar() {
         for (int i = 35; i >= 9; i--) {
             ItemStack stack = ctx.player().inventory.mainInventory.get(i);
-            if (stack.getItem() instanceof ItemBlock) {
+            if (stack.getItem() instanceof BlockItem) {
                 return i;
             }
         }
@@ -745,7 +747,7 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
     private int getRandomBlockIdSlot() {
         for (int i = 0; i < 36; i++) {
             ItemStack stack = ctx.player().inventory.mainInventory.get(i);
-            if (stack.getItem() instanceof ItemBlock) {
+            if (stack.getItem() instanceof BlockItem) {
                 return i;
             }
         }
@@ -755,7 +757,7 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
     private int getItemSlot(int itemId) {
         for (int i = 0; i < 36; i++) {
             ItemStack stack = ctx.player().inventory.mainInventory.get(i);
-            if (Item.getIdFromItem(stack.getItem()) == itemId) {
+            if (Item.getId(stack.getItem()) == itemId) {
                 return i;
             }
         }
@@ -763,22 +765,22 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
         return -1;
     }
 
-    private int getItemSlotNoHotbar(int itemId) {
-        for (int i = 9; i < 36; i++) {
-            ItemStack stack = ctx.player().inventory.mainInventory.get(i);
-            if (Item.getIdFromItem(stack.getItem()) == itemId) {
-                return i;
-            }
-        }
+//    private int getItemSlotNoHotbar(int itemId) {
+//        for (int i = 9; i < 36; i++) {
+//            ItemStack stack = ctx.player().inventory.mainInventory.get(i);
+//            if (Item.getId(stack.getItem()) == itemId) {
+//                return i;
+//            }
+//        }
+//
+//        return -1;
+//    }
 
-        return -1;
-    }
-
-    private IBlockState findNeededBlockNew() { //finds the block giving baritone the biggest problem
-        List<Tuple<BetterBlockPos, IBlockState>> blocksNeeded = new LinkedList<>();
+    private BlockState findNeededBlockNew() { //finds the block giving baritone the biggest problem
+        List<Tuple<BetterBlockPos, BlockState>> blocksNeeded = new LinkedList<>();
         HashSet<BetterBlockPos> set = baritone.getBuilderProcess().getIncorrectPositions();
         for (BetterBlockPos pos : set) {
-            IBlockState current = Helper.mc.world.getBlockState(pos);
+            BlockState current = Helper.mc.world.getBlockState(pos);
             if (!schematic.inSchematic(
                     pos.x - schematicOrigin.getX(),
                     pos.y - schematicOrigin.getY(),
@@ -787,7 +789,7 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
                 continue;
             }
             //Item blockNeeded = Item.getItemFromBlock(schematic.desiredState(pos.x, pos.y, pos.z, current, this.allBlocks).getBlock());
-            IBlockState desiredState = schematic.desiredState(
+            BlockState desiredState = schematic.desiredState(
                     pos.x - schematicOrigin.getX(),
                     pos.y - schematicOrigin.getY(),
                     pos.z - schematicOrigin.getZ(),
@@ -797,13 +799,13 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
             }
         }
 
-        IBlockState closestItem = null;
+        BlockState closestItem = null;
         double closestDistance = Double.MAX_VALUE;
-        for (Tuple<BetterBlockPos, IBlockState> curCheck : blocksNeeded) {
-            double tempDistance = baritone.getPlayerContext().playerFeet().getDistance(curCheck.getFirst().getX(), curCheck.getFirst().getY(), curCheck.getFirst().getZ());
+        for (Tuple<BetterBlockPos, BlockState> curCheck : blocksNeeded) {
+            double tempDistance = baritone.getPlayerContext().playerFeet().getDistance(curCheck.getA().getX(), curCheck.getA().getY(), curCheck.getA().getZ());
             if (tempDistance < closestDistance) {
                 closestDistance = tempDistance;
-                closestItem = curCheck.getSecond();
+                closestItem = curCheck.getB();
             }
         }
 
@@ -814,8 +816,8 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
         return findNeededClosestBlock();
     }
 
-    private IBlockState findNeededClosestBlock() {
-        List<Tuple<BlockPos, IBlockState>> blocksNeeded = new LinkedList<>();
+    private BlockState findNeededClosestBlock() {
+        List<Tuple<BlockPos, BlockState>> blocksNeeded = new LinkedList<>();
         for (int y = 0; y < schematic.heightY(); y++) {
             for (int z = 0; z < schematic.lengthZ(); z++) {
                 for (int x = 0; x < schematic.widthX(); x++) {
@@ -823,7 +825,7 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
                     int blockY = y + schematicOrigin.getY();
                     int blockZ = z + schematicOrigin.getZ();
                     BlockPos curBlockPos = new BlockPos(blockX, blockY, blockZ);
-                    IBlockState current = Helper.mc.world.getBlockState(curBlockPos);
+                    BlockState current = Helper.mc.world.getBlockState(curBlockPos);
                     if (!schematic.inSchematic(x, y, z, current)) {
                         continue;
                     }
@@ -840,7 +842,7 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
                                 sideBlocks.add(curBlockPos.west());
                                 sideBlocks.add(curBlockPos.down());
                                 for (BlockPos curPos : sideBlocks) {
-                                    if (!(Helper.mc.world.getBlockState(curPos).getBlock() instanceof BlockAir) && !(Helper.mc.world.getBlockState(curPos).getBlock() instanceof BlockLiquid)) {
+                                    if (!(Helper.mc.world.getBlockState(curPos).getBlock() instanceof AirBlock) && !(Helper.mc.world.getBlockState(curPos).getBlock() instanceof LiquidBlock)) {
                                         canPlace = true;
                                     }
                                 }
@@ -855,20 +857,20 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
             }
         }
 
-        IBlockState closestItem = Blocks.AIR.getDefaultState();
+        BlockState closestItem = Blocks.AIR.defaultBlockState();
         double closestDistance = Double.MAX_VALUE;
-        for (Tuple<BlockPos, IBlockState> curCheck : blocksNeeded) {
-            double tempDistance = baritone.getPlayerContext().playerFeet().getDistance(curCheck.getFirst().getX(), curCheck.getFirst().getY(), curCheck.getFirst().getZ());
+        for (Tuple<BlockPos, BlockState> curCheck : blocksNeeded) {
+            double tempDistance = baritone.getPlayerContext().playerFeet().getDistance(curCheck.getA().getX(), curCheck.getA().getY(), curCheck.getA().getZ());
             if (tempDistance < closestDistance) {
                 closestDistance = tempDistance;
-                closestItem = curCheck.getSecond();
+                closestItem = curCheck.getB();
             }
         }
 
         return closestItem;
     }
 
-    private int stacksOfBlockNeededSchematic(IBlockState neededBlock) {
+    private int stacksOfBlockNeededSchematic(BlockState neededBlock) {
         int count = 0;
         for (int y = 0; y < schematic.heightY(); y++) {
             for (int z = 0; z < schematic.lengthZ(); z++) {
@@ -877,12 +879,12 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
                     int blockY = y + schematicOrigin.getY();
                     int blockZ = z + schematicOrigin.getZ();
                     BlockPos curBlockPos = new BlockPos(blockX, blockY, blockZ);
-                    IBlockState current = Helper.mc.world.getBlockState(curBlockPos);
+                    BlockState current = Helper.mc.world.getBlockState(curBlockPos);
                     if (!schematic.inSchematic(x, y, z, current)) {
                         continue;
                     }
                     if (Helper.mc.world.isBlockLoaded(curBlockPos, false)) { // check if its in render distance, not if its in cache
-                        IBlockState desiredState = schematic.desiredState(x, y, z, current, this.allBlocks);
+                        BlockState desiredState = schematic.desiredState(x, y, z, current, this.allBlocks);
                         if (!current.equals(desiredState)) {
                             // Block isn't in its correct state so we need some
                             if (desiredState.equals(neededBlock)) {
@@ -898,16 +900,16 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
         return (int) Math.ceil(count / 64.0);
     }
 
-    private int getItemStackCountInventory(IBlockState item) {
+    private int getItemStackCountInventory(BlockState item) {
         int count = 0;
         for (int i = 0; i < 36; i++) {
             ItemStack stack = ctx.player().inventory.mainInventory.get(i);
-            if (stack.getItem() instanceof ItemBlock) {
-                IBlockState state = ((ItemBlock) stack.getItem()).getBlock().getStateForPlacement(ctx.world(), ctx.playerFeet(), EnumFacing.UP, (float) ctx.player().posX, (float) ctx.player().posY, (float) ctx.player().posZ, stack.getItem().getMetadata(stack.getMetadata()), ctx.player());
+            if (stack.getItem() instanceof BlockItem) {
+                BlockState state = ((BlockItem) stack.getItem()).getBlock().getStateForPlacement(ctx.world(), ctx.playerFeet(), Direction.UP, (float) ctx.player().position().x, (float) ctx.player().position().y, (float) ctx.player().position().z, stack.getItem().getMetadata(stack.getMetadata()), ctx.player());
                 if (state.equals(item)) {
                     count++;
                 }
-            } else if (stack.isEmpty() && item.getBlock() instanceof BlockAir) {
+            } else if (stack.isEmpty() && item.getBlock() instanceof AirBlock) {
                 // Counting air slots
                 count++;
             }
@@ -916,17 +918,17 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
         return count;
     }
 
-    private IBlockState findMostCommonBlock() {
+    private BlockState findMostCommonBlock() {
         //use a TreeMap to find what block in the schematic is the most common
-        TreeMap<Integer, IBlockState> blocksInSchematic = new TreeMap<>();
+        TreeMap<Integer, BlockState> blocksInSchematic = new TreeMap<>();
 
         //populate hashmap with blocks from schematic
         //TODO add this
 
         //somehow get the highest key value from the treemap
-        //return that highest key as its IBlockState
+        //return that highest key as its BlockState
         amountOfMostCommonBlock = blocksInSchematic.lastKey(); //amount of common block
-        return (IBlockState) blocksInSchematic.lastEntry(); //the block itself
+        return (BlockState) blocksInSchematic.lastEntry(); //the block itself
     }
 
     //shulker methods
@@ -938,8 +940,8 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
         List<ItemStack> shulkerContents = new ArrayList<>();
         Container curContainer = Helper.mc.player.openContainer;
         for (int i = 0; i < 27; i++) {
-            if (!(curContainer.getSlot(i).getStack().getItem() instanceof ItemAir)) {
-                //int itemId = Item.getIdFromItem(curContainer.getSlot(i).getStack().getItem());
+            if (!(curContainer.getSlot(i).getStack().getItem() instanceof AirItem)) {
+                //int itemId = Item.getId(curContainer.getSlot(i).getStack().getItem());
                 shulkerContents.add(curContainer.getSlot(i).getStack());
             }
         }
@@ -952,8 +954,8 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
         double closestDist = Double.MAX_VALUE;
         for (int x = -2; x < 2; x++) {
             for (int z = -2; z < 2; z++) {
-                if (Helper.mc.world.getBlockState(shulkerSpot.add(x, 0, z)).getBlock() instanceof BlockAir &&
-                        Helper.mc.world.getBlockState(shulkerSpot.add(x, 1, z)).getBlock() instanceof BlockAir) {
+                if (Helper.mc.world.getBlockState(shulkerSpot.add(x, 0, z)).getBlock() instanceof AirBlock &&
+                        Helper.mc.world.getBlockState(shulkerSpot.add(x, 1, z)).getBlock() instanceof AirBlock) {
                     // We can probably stand here, check shulker list
                     BetterBlockPos tempPos = new BetterBlockPos(shulkerSpot.add(x, 0, z));
                     boolean canStand = true;

@@ -40,6 +40,7 @@ import baritone.utils.BlockStateInterface;
 import baritone.utils.PathingCommandContext;
 import baritone.utils.schematic.MapArtSchematic;
 import baritone.utils.schematic.SchematicSystem;
+import baritone.utils.schematic.SelectionSchematic;
 import baritone.utils.schematic.format.defaults.LitematicaSchematic;
 import baritone.utils.schematic.litematica.LitematicaHelper;
 import baritone.utils.schematic.schematica.SchematicaHelper;
@@ -83,11 +84,11 @@ import static baritone.api.pathing.movement.ActionCosts.COST_INF;
 
 public final class BuilderProcess extends BaritoneProcessHelper implements IBuilderProcess {
 
-    private HashSet<BetterBlockPos> incorrectPositions;
+    public HashSet<BetterBlockPos> incorrectPositions;
     private LongOpenHashSet observedCompleted; // positions that are completed even if they're out of render distance and we can't make sure right now
     private String name;
     private ISchematic realSchematic;
-    private ISchematic schematic;
+    public ISchematic schematic;
     private Vec3i origin;
     private int ticks;
     private boolean paused;
@@ -700,6 +701,10 @@ public final class BuilderProcess extends BaritoneProcessHelper implements IBuil
                 }
             }
         }
+    }
+
+    public HashSet<BetterBlockPos> getIncorrectPositions() {
+            return incorrectPositions;
     }
 
     private Goal assemble(BuilderCalculationContext bcc, List<BlockState> approxPlaceable) {

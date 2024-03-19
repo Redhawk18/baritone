@@ -120,8 +120,8 @@ BaritoneAPI.getProvider().getPrimaryBaritone().getCustomGoalProcess().setGoalAnd
 # FAQ
 ## New Commands
 ```mapbuild``` Uses all the new logic programmed
-* A schematica schematic has to be placed for this command to work (mapmatica works aswell)
-* make sure material shulkers are placed with gaps inbetween every 3-4 shulkers
+* A Litematica schematic has to be placed for this command to work
+* make sure material shulkers are placed with gaps between every 3-4 shulkers
 
 ```mapstop```
 * stops baritone

@@ -188,6 +188,7 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
         }
 
         timer++;
+        final int timerMax = Baritone.settings().buildTimer.value;
 
         if (!ctx.player().containerMenu.getCarried().isEmpty() && ctx.player().containerMenu == ctx.player().inventoryMenu) {
             if (cursorStackNonEmpty && timer >= 80) {
@@ -245,7 +246,7 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
                     return;
                 }
 
-                if (baritone.getBuilderProcess().isActive() && !baritone.getBuilderProcess().isPaused() && timer >= 800) {
+                if (baritone.getBuilderProcess().isActive() && !baritone.getBuilderProcess().isPaused() && timer >= timerMax) {
                     if (ctx.player().hasContainerOpen()) {
                         ctx.player().closeContainer(); // Close chest gui so we can actually build
                         timer = 0;
@@ -259,7 +260,7 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
                     }
 
                     if (cachedPlayerFeet.distanceTo(ctx.playerFeet()) < 5) {
-                        Helper.HELPER.logDirect("We haven't moved in 800 ticks. Restarting builder");
+                        Helper.HELPER.logDirect("We haven't moved in " + timerMax + " ticks. Restarting builder");
                         timer = 0;
                         pathBackLoc = findPathBackLoc(true);
                         Helper.HELPER.logDirect("Pathing back loc: " + pathBackLoc);
@@ -393,7 +394,7 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
                 if (isSingleBlockBuild()) {
                     stacksToLoot = Math.min(stacksNeeded, airSlots);
                 } else {
-                    stacksToLoot = Math.min(stacksNeeded, 5);
+                    stacksToLoot = Math.min(stacksNeeded, Baritone.settings().stacksToLoot.value);
                     if (airSlots < stacksToLoot) {
                         stacksToLoot = airSlots;
                     }
@@ -567,7 +568,7 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
     }
 
     private BetterBlockPos findPathBackLoc(boolean findFurthest) {
-        List<BlockPos> set = findInvalidBlocks();//baritone.getBuilderProcess().getIncorrectPositions();
+        List<BlockPos> set = findInvalidBlocks(); //baritone.getBuilderProcess().getIncorrectPositions();
         List<BlockPos> validPathBacks = new LinkedList<>();
         Helper.HELPER.logDirect("Found " + set.size() + " invalid locations.");
         for (BlockPos pos : set) {

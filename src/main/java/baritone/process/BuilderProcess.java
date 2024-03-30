@@ -40,8 +40,8 @@ import baritone.utils.BaritoneProcessHelper;
 import baritone.utils.BlockStateInterface;
 import baritone.utils.PathingCommandContext;
 import baritone.utils.schematic.MapArtSchematic;
-import baritone.utils.schematic.SelectionSchematic;
 import baritone.utils.schematic.SchematicSystem;
+import baritone.utils.schematic.SelectionSchematic;
 import baritone.utils.schematic.format.defaults.LitematicaSchematic;
 import baritone.utils.schematic.litematica.LitematicaHelper;
 import baritone.utils.schematic.schematica.SchematicaHelper;
@@ -97,7 +97,7 @@ public final class BuilderProcess extends BaritoneProcessHelper implements IBuil
     private LongOpenHashSet observedCompleted; // positions that are completed even if they're out of render distance and we can't make sure right now
     private String name;
     private ISchematic realSchematic;
-    private ISchematic schematic;
+    public ISchematic schematic;
     private Vec3i origin;
     private int ticks;
     private boolean paused;
@@ -534,7 +534,9 @@ public final class BuilderProcess extends BaritoneProcessHelper implements IBuil
             if (!Baritone.settings().buildRepeatSneaky.value) {
                 schematic.reset();
             }
-            logDirect("Repeating build in vector " + repeat + ", new origin is " + origin);
+            if (Baritone.settings().buildRepeatLog.value) {
+                logDirect("Repeating build in vector " + repeat + ", new origin is " + origin);
+            }
             return onTick(calcFailed, isSafeToCancel, recursions + 1);
         }
         if (Baritone.settings().distanceTrim.value) {
@@ -610,9 +612,13 @@ public final class BuilderProcess extends BaritoneProcessHelper implements IBuil
                     layer++;
                     return onTick(calcFailed, isSafeToCancel, recursions + 1);
                 }
-                logDirect("Unable to do it. Pausing. resume to resume, cancel to cancel");
-                paused = true;
-                return new PathingCommand(null, PathingCommandType.REQUEST_PAUSE);
+                fullRecalc(bcc);
+                goal = assemble(bcc, approxPlaceable);
+                if (goal == null) {
+                    logDirect("Unable to do it. Pausing. resume to resume, cancel to cancel");
+                    paused = true;
+                    return new PathingCommand(null, PathingCommandType.REQUEST_PAUSE);
+                }
             }
         }
         return new PathingCommandContext(goal, PathingCommandType.FORCE_REVALIDATE_GOAL_AND_PATH, bcc);
@@ -704,6 +710,10 @@ public final class BuilderProcess extends BaritoneProcessHelper implements IBuil
                 }
             }
         }
+    }
+
+    public HashSet<BetterBlockPos> getIncorrectPositions() {
+            return incorrectPositions;
     }
 
     private Goal assemble(BuilderCalculationContext bcc, List<BlockState> approxPlaceable) {

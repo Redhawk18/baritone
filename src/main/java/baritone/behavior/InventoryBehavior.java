@@ -158,6 +158,43 @@ public final class InventoryBehavior extends Behavior implements Helper {
         return bestInd;
     }
 
+//    private int swordSlot() {
+//        NonNullList<ItemStack> invy = ctx.player().inventory.mainInventory;
+//        for (int i = 0; i < invy.size(); i++) {
+//            ItemStack stack = invy.get(i);
+//            if (stack.isEmpty()) {
+//                continue;
+//            }
+//            if (stack.getItem() instanceof ItemSword) {
+//                return i;
+//            }
+//        }
+//
+//        return -1;
+//    }
+
+//    private int foodSlot() {
+//        NonNullList<ItemStack> invy = ctx.player().inventory.mainInventory;
+//        int goldenCarrotSlot = -1;
+//        int foodSlot = -1;
+//        for (int i = 0; i < invy.size(); i++) {
+//            ItemStack stack = invy.get(i);
+//            if (stack.isEmpty()) {
+//                continue;
+//            }
+//            if (stack.getItem() instanceof ItemAppleGold) {
+//                return i;
+//            }
+//            if (Item.getIdFromItem(stack.getItem()) == Item.getIdFromItem(Items.GOLDEN_CARROT) && goldenCarrotSlot == -1) {
+//                goldenCarrotSlot = i;
+//            } else if (stack.getItem() instanceof ItemFood) {
+//                foodSlot = i;
+//            }
+//        }
+//
+//        return goldenCarrotSlot != -1 ? goldenCarrotSlot : foodSlot;
+//    }
+
     public boolean hasGenericThrowaway() {
         for (Item item : Baritone.settings().acceptableThrowawayItems.value) {
             if (throwaway(false, stack -> item.equals(stack.getItem()))) {
@@ -166,6 +203,20 @@ public final class InventoryBehavior extends Behavior implements Helper {
         }
         return false;
     }
+
+//    public boolean hasGenericThrowawayFullInv() {
+//        EntityPlayerSP p = ctx.player();
+//        NonNullList<ItemStack> inv = p.inventory.mainInventory;
+//        for (Item item : Baritone.settings().acceptableThrowawayItems.value) {
+//            for (int i = 0; i < 36; i++) {
+//                ItemStack itemStackInv = inv.get(i);
+//                if (item.equals(itemStackInv.getItem())) {
+//                    return true;
+//                }
+//            }
+//        }
+//        return false;
+//    }
 
     public boolean selectThrowawayForLocation(boolean select, int x, int y, int z) {
         BlockState maybe = baritone.getBuilderProcess().placeAt(x, y, z, baritone.bsi.get0(x, y, z));
@@ -182,6 +233,42 @@ public final class InventoryBehavior extends Behavior implements Helper {
         }
         return false;
     }
+
+//    public boolean throwawayFullInv(boolean select, Predicate<? super ItemStack> desired) {
+//        EntityPlayerSP p = ctx.player();
+//        NonNullList<ItemStack> inv = p.inventory.mainInventory;
+//        for (int i = 0; i < 36; i++) {
+//            ItemStack item = inv.get(i);
+//            // this usage of settings() is okay because it's only called once during pathing
+//            // (while creating the CalculationContext at the very beginning)
+//            // and then it's called during execution
+//            // since this function is never called during cost calculation, we don't need to migrate
+//            // acceptableThrowawayItems to the CalculationContext
+//            if (desired.test(item)) {
+//                if (select) {
+//                    p.inventory.currentItem = i;
+//                }
+//                return true;
+//            }
+//        }
+//        if (desired.test(p.inventory.offHandInventory.get(0))) {
+//            // main hand takes precedence over off hand
+//            // that means that if we have block A selected in main hand and block B in off hand, right clicking places block B
+//            // we've already checked above ^ and the main hand can't possible have an acceptablethrowawayitem
+//            // so we need to select in the main hand something that doesn't right click
+//            // so not a shovel, not a hoe, not a block, etc
+//            for (int i = 0; i < 9; i++) {
+//                ItemStack item = inv.get(i);
+//                if (item.isEmpty() || item.getItem() instanceof ItemPickaxe) {
+//                    if (select) {
+//                        p.inventory.currentItem = i;
+//                    }
+//                    return true;
+//                }
+//            }
+//        }
+//        return false;
+//    }
 
     public boolean throwaway(boolean select, Predicate<? super ItemStack> desired) {
         return throwaway(select, desired, Baritone.settings().allowInventory.value);

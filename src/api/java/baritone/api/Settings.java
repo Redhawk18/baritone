@@ -29,6 +29,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.CarpetBlock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -1031,6 +1032,11 @@ public final class Settings {
     public final Setting<Boolean> buildRepeatSneaky = new Setting<>(true);
 
     /**
+     * If this is true, when buildRepeat occurs the new information will be logged to chat
+     */
+    public final Setting<Boolean> buildRepeatLog = new Setting<>(false);
+
+    /**
      * Allow standing above a block while mining it, in BuilderProcess
      * <p>
      * Experimental
@@ -1509,6 +1515,16 @@ public final class Settings {
     public final List<Setting<?>> allSettings;
 
     public final Map<Setting<?>, Type> settingTypes;
+
+    /**
+     * The max timeout for the build before it gives up on the current state.
+     */
+    public Setting<Integer> buildTimer = new Setting<>(800);
+
+    /**
+     * The max amount of stacks that will be taken when looting
+     */
+    public Setting<Integer> stacksToLoot = new Setting<>(5);
 
     public final class Setting<T> {
 

@@ -121,27 +121,26 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
 
     @Override
     public void build() {
-        if (LitematicaHelper.isLitematicaPresent()) {
-            int litematicaIndex = 0;
-            if (LitematicaHelper.hasLoadedSchematic()) {
-                schematicName = LitematicaHelper.getName(litematicaIndex);
-                schematicOrigin = LitematicaHelper.getOrigin(litematicaIndex);
-                try {
-                    LitematicaSchematic schematic = new LitematicaSchematic(NbtIo.readCompressed(Files.newInputStream(LitematicaHelper.getSchematicFile(litematicaIndex).toPath())), false);
-                    this.schematic = LitematicaHelper.blackMagicFuckery(schematic, litematicaIndex);
-                } catch (Exception e) {
-                    Helper.HELPER.logDirect("No schematic file could be loaded");
-                    return;
-                }
-            } else {
-                Helper.HELPER.logDirect("No schematic currently open");
-                return;
-            }
-        } else {
+        if (!LitematicaHelper.isLitematicaPresent()) {
             Helper.HELPER.logDirect("Litematica is not present");
             return;
         }
 
+        if (!LitematicaHelper.hasLoadedSchematic()) {
+            Helper.HELPER.logDirect("No schematic currently open");
+            return;
+        }
+
+        int litematicaIndex = 0;
+        schematicName = LitematicaHelper.getName(litematicaIndex);
+        schematicOrigin = LitematicaHelper.getOrigin(litematicaIndex);
+        try {
+            LitematicaSchematic schematic = new LitematicaSchematic(NbtIo.readCompressed(Files.newInputStream(LitematicaHelper.getSchematicFile(litematicaIndex).toPath())), false);
+            this.schematic = LitematicaHelper.blackMagicFuckery(schematic, litematicaIndex);
+        } catch (Exception e) {
+            Helper.HELPER.logDirect("Failure to load schematic");
+            return;
+        }
 
         shulkerList = new ArrayList<>();
         timer = 0;
@@ -281,26 +280,23 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
 
             case ShulkerSearchPathing: {
                 if (baritone.getCustomGoalProcess().isActive()) {
-                    Helper.HELPER.logDirect("custom goal to path to shulker");
                     return; // Wait to get there
                 }
 
                 curCheckingShulker = getShulkerToCheck();
-                Helper.HELPER.logDirect("found current shulker: " + curCheckingShulker.toString());
                 if (curCheckingShulker == null) {
                     currentState = State.Nothing;
                     return;
                 }
+                Helper.HELPER.logDirect("found current shulker: " + curCheckingShulker);
 
                 Optional<Rotation> shulkerReachable = RotationUtils.reachable(ctx, curCheckingShulker,
                         ctx.playerController().getBlockReachDistance());
 
                 if (shulkerReachable.isPresent()) {
-                    Helper.HELPER.logDirect("opening shulker");
                     currentState = State.ShulkerSearchOpening;
                     timer = 0;
                 } else {
-                    Helper.HELPER.logDirect("Going to shulker");
                     baritone.getCustomGoalProcess().setGoalAndPath(new GoalBlock(getPathingSpotByShulker(curCheckingShulker)));
                 }
                 break;

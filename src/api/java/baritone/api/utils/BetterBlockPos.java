@@ -80,7 +80,7 @@ public final class BetterBlockPos extends BlockPos {
 
     @Override
     public int hashCode() {
-        return (int) longHash(x, y, z);
+        return super.hashCode();
     }
 
     public static long longHash(BetterBlockPos pos) {
@@ -113,8 +113,7 @@ public final class BetterBlockPos extends BlockPos {
         if (o == null) {
             return false;
         }
-        if (o instanceof BetterBlockPos) {
-            BetterBlockPos oth = (BetterBlockPos) o;
+        if (o instanceof BetterBlockPos oth) {
             return oth.x == x && oth.y == y && oth.z == z;
         }
         // during path execution, like "if (whereShouldIBe.equals(whereAmI)) {"

@@ -18,6 +18,7 @@
 package baritone.process;
 
 import baritone.Baritone;
+import baritone.api.Settings;
 import baritone.api.pathing.goals.Goal;
 import baritone.api.pathing.goals.GoalBlock;
 import baritone.api.pathing.goals.GoalComposite;
@@ -764,7 +765,7 @@ public final class BuilderProcess extends BaritoneProcessHelper implements IBuil
             return new JankyGoalComposite(new GoalComposite(toPlace.toArray(new Goal[0])), new GoalComposite(toBreak.toArray(new Goal[0])));
         }
         if (toBreak.isEmpty()) {
-            if (logMissing && !missing.isEmpty()) {
+            if (logMissing && !missing.isEmpty() && Baritone.settings().chatMissingMaterial.value) {
                 logDirect("Missing materials for at least:");
                 logDirect(missing.entrySet().stream()
                         .map(e -> String.format("%sx %s", e.getValue(), e.getKey()))

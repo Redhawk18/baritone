@@ -677,6 +677,11 @@ public final class Settings {
      */
     public final Setting<Boolean> chatControlAnyway = new Setting<>(false);
 
+    /*
+    * Enables or disables the missing material messages that flood chat.
+    */
+    public final Setting<Boolean> chatMissingMaterial = new Setting<>(true);
+
     /**
      * Render the path
      */
@@ -1522,9 +1527,21 @@ public final class Settings {
     public Setting<Integer> buildTimer = new Setting<>(800);
 
     /**
-     * The max amount of stacks that will be taken when looting
+     * The max number of stacks that will be taken when looting.
      */
     public Setting<Integer> stacksToLoot = new Setting<>(5);
+
+    /**
+     * The max number of stacks of carpets that will be taken when looting, this overrides `stacksToLoot`.
+     * Having this value set higher reduces restocking greatly, which is slow.
+     */
+    public Setting<Integer> stacksToLootCarpet = new Setting<>(27);
+
+    /**
+     * When items flow into a container that is being looted, we will not take any stack that has this amount or lower.
+     * If your build environment does not have hoppers refilling boxes, feel free to set to 0.
+     */
+    public Setting<Integer> minimumItemsInAStack = new Setting<>(8);
 
     public final class Setting<T> {
 

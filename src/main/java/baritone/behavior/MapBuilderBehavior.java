@@ -20,6 +20,7 @@ package baritone.behavior;
 import baritone.api.behavior.IMapBuilderBehavior;
 import baritone.api.event.events.TickEvent;
 import baritone.api.pathing.goals.GoalBlock;
+import baritone.api.pathing.goals.GoalNear;
 import baritone.api.schematic.ISchematic;
 import baritone.api.utils.BetterBlockPos;
 import baritone.api.utils.Helper;
@@ -62,25 +63,29 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
         super(baritone);
     }
 
-    //baritone
+    public static final int hotBarSize = 9;
+    public static final int inventorySize = 27;
+    public static final int totalInventorySize = hotBarSize + inventorySize;
+
+    // Baritone
     private boolean paused = true;
     private int timer = 0;
     private State currentState = State.Nothing;
 
-    //schematic
+    // Schematic
     private ISchematic schematic;
     private String schematicName;
     private Vec3i schematicOrigin;
 
-    //shulker variables
+    // Shulker variables
     private List<ShulkerInfo> shulkerList = new ArrayList<>();
     private BetterBlockPos curCheckingShulker = null;
 
-    //locations
+    // Locations
     private BetterBlockPos cachedPlayerFeet = null;
     private BetterBlockPos pathBackLoc = null;
 
-    //material/block variables
+    // Material or Block variables
     private List<BlockState> allBlocks = new LinkedList<>();
     private boolean cursorStackNonEmpty = false;
 
@@ -201,7 +206,7 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
 
                     if (emptySlot <= 8) {
                         // Fix slot id if it's a hotbar slot
-                        emptySlot += 36;
+                        emptySlot += totalInventorySize;
                     }
                     ctx.playerController().windowClick(ctx.player().inventoryMenu.containerId, emptySlot, 0, ClickType.PICKUP, ctx.player());
                     // ctx.player()Controller.updateController();
@@ -297,7 +302,7 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
                     currentState = State.ShulkerSearchOpening;
                     timer = 0;
                 } else {
-                    baritone.getCustomGoalProcess().setGoalAndPath(new GoalBlock(getPathingSpotByShulker(curCheckingShulker)));
+                    baritone.getCustomGoalProcess().setGoalAndPath(new GoalNear(curCheckingShulker, 4));
                 }
                 break;
             }
@@ -353,8 +358,26 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
                         shulkerInfo.checked = true;
                         shulkerInfo.contents = getOpenShulkerContents();
                         if (shulkerInfo.contents != null) {
-                            for (ItemStack ItemStack : shulkerInfo.contents) {
-                                BlockState state = ((BlockItem) ItemStack.getItem()).getBlock().getStateForPlacement(new BlockPlaceContext(new UseOnContext(ctx.world(), ctx.player(), InteractionHand.MAIN_HAND, ItemStack, new BlockHitResult(new Vec3(ctx.player().position().x, ctx.player().position().y, ctx.player().position().z), Direction.UP, ctx.playerFeet(), false)) {}));
+                            for (ItemStack itemStack : shulkerInfo.contents) {
+                                // Any random item would cause a cast failure that isn't a block
+                                if (!(itemStack.getItem() instanceof BlockItem)) continue;
+                                BlockState state = ((BlockItem) itemStack.getItem())
+                                        .getBlock()
+                                        .getStateForPlacement(
+                                                new BlockPlaceContext(
+                                                        new UseOnContext(
+                                                                ctx.world(),
+                                                                ctx.player(),
+                                                                InteractionHand.MAIN_HAND,
+                                                                itemStack,
+                                                                new BlockHitResult(
+                                                                        new Vec3(
+                                                                                ctx.player().position().x,
+                                                                                ctx.player().position().y,
+                                                                                ctx.player().position().z),
+                                                                        Direction.UP,
+                                                                        ctx.playerFeet(),
+                                                                        false)) {}));
                                 if (!allBlocks.contains(state) && !(state.getBlock() instanceof AirBlock)) {
                                     allBlocks.add(state);
                                 }
@@ -384,26 +407,48 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
                     return;
                 }
 
-                //finds how many stacks of already chosen block are needed
+                // Finds how many stacks of already chosen block are needed.
                 int stacksNeeded = stacksOfBlockNeededSchematic(closestNeededBlock);
                 int airSlots = getItemStackCountInventory(Blocks.AIR.defaultBlockState());
                 if (isSingleBlockBuild()) {
                     stacksToLoot = Math.min(stacksNeeded, airSlots);
                 } else {
-                    stacksToLoot = Math.min(stacksNeeded, Baritone.settings().stacksToLoot.value);
+                    // Carpet is easier to place, so we restock in bulk.
+                    if (closestNeededBlock.getBlock() instanceof CarpetBlock) {
+                        stacksToLoot = Math.min(stacksNeeded, Baritone.settings().stacksToLootCarpet.value);
+                    } else {
+                        stacksToLoot = Math.min(stacksNeeded, Baritone.settings().stacksToLoot.value);
+                    }
+
                     if (airSlots < stacksToLoot) {
                         stacksToLoot = airSlots;
                     }
                 }
 
 
-                //figures out which shulker contains the blocks needed
+                // Figures out which shulker contains the blocks needed.
                 Helper.HELPER.logDirect("We need " + stacksToLoot + " stacks of: " + closestNeededBlock.toString());
                 curCheckingShulker = null;
                 for (ShulkerInfo curShulker : shulkerList) {
                     for (ItemStack stack : curShulker.contents) {
+                        if (!(stack.getItem() instanceof BlockItem)) continue;
                         //Gets the block state since you can't use block ids due to blocks having same ids but are different
-                        BlockState state = ((BlockItem) stack.getItem()).getBlock().getStateForPlacement(new BlockPlaceContext(new UseOnContext(ctx.world(), ctx.player(), InteractionHand.MAIN_HAND, stack, new BlockHitResult(new Vec3(ctx.player().position().x, ctx.player().position().y, ctx.player().position().z), Direction.UP, ctx.playerFeet(), false)) {}));
+                        BlockState state = ((BlockItem) stack.getItem()).getBlock().getStateForPlacement(
+                                new BlockPlaceContext(
+                                        new UseOnContext(
+                                                ctx.world(),
+                                                ctx.player(),
+                                                InteractionHand.MAIN_HAND,
+                                                stack,
+                                                new BlockHitResult(
+                                                        new Vec3(
+                                                                ctx.player().position().x,
+                                                                ctx.player().position().y,
+                                                                ctx.player().position().z),
+                                                        Direction.UP,
+                                                        ctx.playerFeet(),
+                                                        false)) {}
+                                ));
 
                         // Torches can be placed in diff facing directions, so we need this
                         if (closestNeededBlock.getBlock() instanceof TorchBlock) {
@@ -443,7 +488,7 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
                 if (shulkerReachable.isPresent()) {
                     currentState = State.OpeningShulker;
                 } else {
-                    baritone.getCustomGoalProcess().setGoalAndPath(new GoalBlock(getPathingSpotByShulker(curCheckingShulker)));
+                    baritone.getCustomGoalProcess().setGoalAndPath(new GoalNear(curCheckingShulker, 4));
                 }
                 break;
             }
@@ -550,26 +595,29 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
         BlockState firstState = null;
         for (ShulkerInfo curShulker : shulkerList) {
             for (ItemStack stack : curShulker.contents) {
-                if (stack.getItem() instanceof BlockItem) {
-                    BlockState state = ((BlockItem) stack.getItem()).getBlock().getStateForPlacement(new BlockPlaceContext(new UseOnContext(ctx.world(), ctx.player(), InteractionHand.MAIN_HAND, stack, new BlockHitResult(new Vec3(ctx.player().position().x, ctx.player().position().y, ctx.player().position().z), Direction.UP, ctx.playerFeet(), false)) {}));
-                    if (firstState == null) {
-                        firstState = state;
-                    } else if (!firstState.equals(state)) {
-                        return false;
-                    }
+                if (!(stack.getItem() instanceof BlockItem)) continue;
+                BlockState state = ((BlockItem) stack.getItem()).getBlock().getStateForPlacement(new BlockPlaceContext(new UseOnContext(ctx.world(), ctx.player(), InteractionHand.MAIN_HAND, stack, new BlockHitResult(new Vec3(ctx.player().position().x, ctx.player().position().y, ctx.player().position().z), Direction.UP, ctx.playerFeet(), false)) {}));
+                if (firstState == null) {
+                    firstState = state;
+                } else if (!firstState.equals(state)) {
+                    return false;
                 }
+
             }
         }
         return true;
     }
 
     private BetterBlockPos findPathBackLoc(boolean findFurthest) {
-        List<BlockPos> set = findInvalidBlocks(); //baritone.getBuilderProcess().getIncorrectPositions();
+        // List<BlockPos> set = findInvalidBlocks(); // test bartione's version since we dont have to maintain that and it likely has less bugs
+        HashSet<BetterBlockPos> set = baritone.getBuilderProcess().getIncorrectPositions();
         List<BlockPos> validPathBacks = new LinkedList<>();
         Helper.HELPER.logDirect("Found " + set.size() + " invalid locations.");
         for (BlockPos pos : set) {
-            // If invalid block we are checking isn't loaded, or we don't have any of it in our inventory just skip
-            if (!ctx.world().isLoaded(pos) || ctx.world().getBlockState(pos).getBlock() instanceof AirBlock || getItemStackCountInventory(ctx.world().getBlockState(pos)) == 0) {
+            // If the invalid block we are checking isn't loaded, or we don't have any of it in our inventory, just skip
+            if (!ctx.world().isLoaded(pos) ||
+                    ctx.world().getBlockState(pos).getBlock() instanceof AirBlock ||
+                    getItemStackCountInventory(ctx.world().getBlockState(pos)) == 0) {
                 continue;
             }
             List<BlockPos> validSideBlocks = new LinkedList<>();
@@ -581,7 +629,7 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
                         // Make sure side block isn't air, water, or web
                         if (!(sideBlock instanceof AirBlock) && !(sideBlock instanceof LiquidBlock) && !(sideBlock instanceof WebBlock)) {
                             // We can stand here
-                            if (sideBlock instanceof CarpetBlock) {
+                            if (sideBlock instanceof CarpetBlock || sideBlock instanceof PressurePlateBlock) {
                                 validSideBlocks.add(curBlockPos);
                             } else {
                                 validSideBlocks.add(curBlockPos.above()); // Add one height so we can stand
@@ -657,7 +705,7 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
     private int getChestSlotCount(BlockState item) {
         int count = 0;
         AbstractContainerMenu curContainer = ctx.player().containerMenu;
-        for (int i = 0; i < 27; i++) {
+        for (int i = 0; i < inventorySize; i++) {
             if (!(curContainer.getSlot(i).getItem().getItem() instanceof BlockItem)) {
                 continue;
             }
@@ -669,15 +717,16 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
         return count;
     }
 
-    // Returns the item that was in our inventory before looting
-    // So if we loot into air slot then it's an Air item
+    // Returns the item in our inventory before looting,
+    // So if we loot into air slot, then it's an Air item
     // Otherwise it's the item that got swapped into the chest
     private BlockState lootItemChestSlot(BlockState itemLoot) {
         AbstractContainerMenu curContainer = ctx.player().containerMenu;
-        for (int i = 0; i < 27; i++) { //loops through all slots in shulker box
+        for (int i = 0; i < inventorySize; i++) { //loops through all slots in shulker box
             //checks to see if there are problem items within shulker
             if (curContainer.getSlot(i).getItem().getItem() instanceof AirItem || //empty slots
-                    !(curContainer.getSlot(i).getItem().getItem() instanceof BlockItem)) { //non-blocks
+                    !(curContainer.getSlot(i).getItem().getItem() instanceof BlockItem) ||
+                    curContainer.getSlot(i).getItem().getCount() < Baritone.settings().minimumItemsInAStack.value) { //non-blocks
                 continue;
             }
 
@@ -714,7 +763,7 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
     }
 
     private int getRandomBlockIdSlotNoHotbar() {
-        for (int i = 35; i >= 9; i--) {
+        for (int i = totalInventorySize - 1; i >= hotBarSize; i--) {
             ItemStack stack = ctx.player().getInventory().getItem(i);
             if (stack.getItem() instanceof BlockItem) {
                 return i;
@@ -724,7 +773,7 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
     }
 
     private int getRandomBlockIdSlot() {
-        for (int i = 0; i < 36; i++) {
+        for (int i = 0; i < totalInventorySize; i++) {
             ItemStack stack = ctx.player().getInventory().getItem(i);
             if (stack.getItem() instanceof BlockItem) {
                 return i;
@@ -734,7 +783,7 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
     }
 
     private int getItemSlot(int itemId) {
-        for (int i = 0; i < 36; i++) {
+        for (int i = 0; i < totalInventorySize; i++) {
             ItemStack stack = ctx.player().getInventory().getItem(i);
             if (Item.getId(stack.getItem()) == itemId) {
                 return i;
@@ -744,18 +793,8 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
         return -1;
     }
 
-//    private int getItemSlotNoHotbar(int itemId) {
-//        for (int i = 9; i < 36; i++) {
-//            ItemStack stack = ctx.player().getInventory().getItem(i);
-//            if (Item.getId(stack.getItem()) == itemId) {
-//                return i;
-//            }
-//        }
-//
-//        return -1;
-//    }
-
-    private BlockState findNeededBlockNew() { //finds the block giving baritone the biggest problem
+    /// Finds the block giving us the biggest problem.
+    private BlockState findNeededBlockNew() {
         List<Tuple<BetterBlockPos, BlockState>> blocksNeeded = new LinkedList<>();
         HashSet<BetterBlockPos> set = baritone.getBuilderProcess().getIncorrectPositions();
         for (BetterBlockPos pos : set) {
@@ -884,7 +923,21 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
         for (int i = 0; i < 36; i++) {
             ItemStack stack = ctx.player().getInventory().getItem(i);
             if (stack.getItem() instanceof BlockItem) {
-                BlockState state = ((BlockItem) stack.getItem()).getBlock().getStateForPlacement(new BlockPlaceContext(new UseOnContext(ctx.world(), ctx.player(), InteractionHand.MAIN_HAND, stack, new BlockHitResult(new Vec3(ctx.player().position().x, ctx.player().position().y, ctx.player().position().z), Direction.UP, ctx.playerFeet(), false)) {}));
+                BlockState state = ((BlockItem) stack.getItem()).getBlock().getStateForPlacement(
+                        new BlockPlaceContext(
+                                new UseOnContext(
+                                        ctx.world(),
+                                        ctx.player(),
+                                        InteractionHand.MAIN_HAND,
+                                        stack,
+                                        new BlockHitResult(
+                                                new Vec3(
+                                                        ctx.player().position().x,
+                                                        ctx.player().position().y,
+                                                        ctx.player().position().z),
+                                                Direction.UP,
+                                                ctx.playerFeet(),
+                                                false)) {}));
                 if (state.equals(item)) {
                     count++;
                 }
@@ -918,7 +971,7 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
 
         List<ItemStack> shulkerContents = new ArrayList<>();
         AbstractContainerMenu curContainer = ctx.player().containerMenu;
-        for (int i = 0; i < 27; i++) {
+        for (int i = 0; i < inventorySize; i++) {
             if (!(curContainer.getSlot(i).getItem().getItem() instanceof AirItem)) {
                 //int itemId = Item.getId(curContainer.getSlot(i).getItem().getItem());
                 shulkerContents.add(curContainer.getSlot(i).getItem());
@@ -926,37 +979,6 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
         }
 
         return shulkerContents;
-    }
-
-    private BetterBlockPos getPathingSpotByShulker(BetterBlockPos shulkerSpot) {
-        BetterBlockPos closestPos = shulkerSpot.north().above(); // Just a fallback so we can stand somewhere
-        double closestDist = Double.MAX_VALUE;
-        for (int x = -2; x < 2; x++) {
-            for (int z = -2; z < 2; z++) {
-                if (ctx.world().getBlockState(shulkerSpot.offset(x, 0, z)).getBlock() instanceof AirBlock &&
-                        ctx.world().getBlockState(shulkerSpot.above()).getBlock() instanceof AirBlock) {
-                    // We can probably stand here, check shulker list
-                    BetterBlockPos tempPos = new BetterBlockPos(shulkerSpot);
-                    boolean canStand = true;
-                    for (ShulkerInfo curInfo : shulkerList) {
-                        // Needed because if position is unloaded then it'll show up as a valid location
-                        if (curInfo.pos.equals(tempPos)) {
-                            canStand = false;
-                            break;
-                        }
-                    }
-                    if (canStand) {
-                        double tempDist = tempPos.distanceTo(shulkerSpot);
-                        if (tempDist < closestDist) {
-                            closestDist = tempDist;
-                            closestPos = tempPos;
-                        }
-                    }
-                }
-            }
-        }
-
-        return closestPos;
     }
 
     private BetterBlockPos getShulkerToCheck() {

@@ -31,10 +31,15 @@ import baritone.Baritone;
 import baritone.utils.accessor.ILevel;
 import baritone.utils.schematic.format.defaults.LitematicaSchematic;
 import baritone.utils.schematic.litematica.LitematicaHelper;
+
+import net.minecraft.world.level.block.entity.BlockEntityType;
+import org.apache.commons.lang3.Range;
+
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.Vec3i;
 import net.minecraft.nbt.NbtIo;
+import net.minecraft.network.chat.Component;
 import net.minecraft.util.Tuple;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.inventory.AbstractContainerMenu;
@@ -45,7 +50,6 @@ import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.block.*;
 import net.minecraft.world.level.block.AirBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
-import net.minecraft.world.level.block.entity.ShulkerBoxBlockEntity;
 import net.minecraft.world.level.block.entity.TickingBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
@@ -59,69 +63,34 @@ import java.util.List;
 import java.util.Optional;
 
 public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior {
-    public MapBuilderBehavior(Baritone baritone) {
-        super(baritone);
-    }
+    public static final int HOT_BAR_SIZE = 9;
+    public static final int INVENTORY_SIZE = 27;
+    public static final int TOTAL_INVENTORY_SIZE = HOT_BAR_SIZE + INVENTORY_SIZE;
 
-    public static final int hotBarSize = 9;
-    public static final int inventorySize = 27;
-    public static final int totalInventorySize = hotBarSize + inventorySize;
+    public static final int PATHING_RANGE = 4;
 
     // Baritone
     private boolean paused = true;
     private int timer = 0;
     private State currentState = State.Nothing;
-
     // Schematic
     private ISchematic schematic;
     private String schematicName;
     private Vec3i schematicOrigin;
-
     // Shulker variables
-    private List<ShulkerInfo> shulkerList = new ArrayList<>();
+    private List<StorageBoxInfo> shulkerList = new ArrayList<>();
     private BetterBlockPos curCheckingShulker = null;
-
     // Locations
     private BetterBlockPos cachedPlayerFeet = null;
     private BetterBlockPos pathBackLoc = null;
-
     // Material or Block variables
     private List<BlockState> allBlocks = new LinkedList<>();
     private boolean cursorStackNonEmpty = false;
-
     private BlockState closestNeededBlock;
     private int stacksToLoot = 0;
 
-    // we will revisit a 2nd block resource grab later
-    // private BlockState mostCommonBlock; //holds the most common block in the schematic
-    // private int amountOfMostCommonBlock = -1;
-
-
-
-    private enum State {
-        Nothing,
-
-        Building,
-
-        ShulkerSearchPathing,
-        ShulkerSearchOpening,
-        ShulkerSearchChecking,
-
-        SchematicScanning,
-        PathingToShulker,
-        OpeningShulker,
-        LootingShulker,
-
-        PathingBack
-    }
-
-    private static class ShulkerInfo {
-        public ShulkerInfo(BetterBlockPos Pos) {
-            pos = Pos;
-        }
-        public BetterBlockPos pos;
-        public List<ItemStack> contents = new ArrayList<>();
-        public boolean checked = false;
+    public MapBuilderBehavior(Baritone baritone) {
+        super(baritone);
     }
 
     @Override
@@ -156,7 +125,7 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
         currentState = State.Nothing;
         pathBackLoc = null;
 
-        populateShulkerInfoList();
+        populateStorageInfoList();
         paused = false;
     }
 
@@ -186,7 +155,6 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
 
     @Override
     public void onTick(TickEvent event) {
-        // Helper.HELPER.logDirect("onTick Start");
         if (paused || schematic == null || ctx.player() == null || ctx.player().getInventory().isEmpty()) {
             return;
         }
@@ -205,11 +173,10 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
                     Helper.HELPER.logDirect("Had " + ctx.player().containerMenu.getCarried().getDisplayName() + " on our cursor. Trying to place into slot " + emptySlot);
 
                     if (emptySlot <= 8) {
-                        // Fix slot id if it's a hotbar slot
-                        emptySlot += totalInventorySize;
+                        // Fix slot id if it's a hot bar slot
+                        emptySlot += TOTAL_INVENTORY_SIZE;
                     }
                     ctx.playerController().windowClick(ctx.player().inventoryMenu.containerId, emptySlot, 0, ClickType.PICKUP, ctx.player());
-                    // ctx.player()Controller.updateController();
                     cursorStackNonEmpty = false;
                     return;
                 }
@@ -225,9 +192,9 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
 
         switch (currentState) {
             case Nothing: {
-                for (ShulkerInfo curShulker : shulkerList) {
+                for (StorageBoxInfo curShulker : shulkerList) {
                     if (!curShulker.checked) {
-                        currentState = State.ShulkerSearchPathing;
+                        currentState = State.StorageSearchPathing;
                         timer = 0;
                         return;
                     }
@@ -283,7 +250,7 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
                 break;
             }
 
-            case ShulkerSearchPathing: {
+            case StorageSearchPathing: {
                 if (baritone.getCustomGoalProcess().isActive()) {
                     return; // Wait to get there
                 }
@@ -298,22 +265,26 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
                 Optional<Rotation> shulkerReachable = RotationUtils.reachable(ctx, curCheckingShulker,
                         ctx.playerController().getBlockReachDistance());
 
+                Helper.HELPER.logDirect("Is shulker reachable: " + shulkerReachable.isPresent());
+
                 if (shulkerReachable.isPresent()) {
-                    currentState = State.ShulkerSearchOpening;
+                    currentState = State.StorageSearchOpening;
                     timer = 0;
                 } else {
-                    baritone.getCustomGoalProcess().setGoalAndPath(new GoalNear(curCheckingShulker, 4));
+                    baritone.getCustomGoalProcess().setGoalAndPath(new GoalNear(curCheckingShulker, PATHING_RANGE));
+//                    Helper.HELPER.logDirect("goal is active: " + baritone.getCustomGoalProcess().isActive());
+//                    Helper.HELPER.logDirect("who had control last:" + baritone.getPathingControlManager().mostRecentInControl());
                 }
                 break;
             }
 
-            case ShulkerSearchOpening: {
+            case StorageSearchOpening: {
                 if (timer < 20) {
                     return;
                 }
 
                 if (curCheckingShulker == null) {
-                    currentState = State.ShulkerSearchPathing;
+                    currentState = State.StorageSearchPathing;
                     return;
                 }
 
@@ -322,7 +293,7 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
                 shulkerReachable.ifPresent(rotation -> baritone.getLookBehavior().updateTarget(rotation, true));
 
                 if (shulkerReachable.isEmpty()) {
-                    currentState = State.ShulkerSearchPathing;
+                    currentState = State.StorageSearchPathing;
                     timer = 0;
                     return;
                 }
@@ -338,22 +309,22 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
                     timer = 0;
                 } else {
                     baritone.getInputOverrideHandler().clearAllKeys();
-                    currentState = State.ShulkerSearchChecking;
+                    currentState = State.StorageSearchChecking;
                 }
                 break;
             }
 
-            case ShulkerSearchChecking: {
+            case StorageSearchChecking: {
                 if (timer < 40) {
                     return;
                 }
 
                 if (!(ctx.player().hasContainerOpen())) {
-                    currentState = State.ShulkerSearchOpening;
+                    currentState = State.StorageSearchOpening;
                     return;
                 }
 
-                for (ShulkerInfo shulkerInfo : shulkerList) {
+                for (StorageBoxInfo shulkerInfo : shulkerList) {
                     if (shulkerInfo.pos.equals(curCheckingShulker)) {
                         shulkerInfo.checked = true;
                         shulkerInfo.contents = getOpenShulkerContents();
@@ -377,7 +348,8 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
                                                                                 ctx.player().position().z),
                                                                         Direction.UP,
                                                                         ctx.playerFeet(),
-                                                                        false)) {}));
+                                                                        false)) {
+                                                        }));
                                 if (!allBlocks.contains(state) && !(state.getBlock() instanceof AirBlock)) {
                                     allBlocks.add(state);
                                 }
@@ -387,7 +359,7 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
                     }
                 }
 
-                currentState = State.ShulkerSearchPathing;
+                currentState = State.StorageSearchPathing;
                 ctx.player().closeContainer();
                 timer = 0;
                 break;
@@ -414,7 +386,10 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
                     stacksToLoot = Math.min(stacksNeeded, airSlots);
                 } else {
                     // Carpet is easier to place, so we restock in bulk.
-                    if (closestNeededBlock.getBlock() instanceof CarpetBlock) {
+                    if (closestNeededBlock.getBlock() instanceof CarpetBlock ||
+                            closestNeededBlock.getBlock() == Blocks.WHITE_WOOL ||
+                            closestNeededBlock.getBlock() == Blocks.BLACK_WOOL
+                    ) {
                         stacksToLoot = Math.min(stacksNeeded, Baritone.settings().stacksToLootCarpet.value);
                     } else {
                         stacksToLoot = Math.min(stacksNeeded, Baritone.settings().stacksToLoot.value);
@@ -429,7 +404,7 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
                 // Figures out which shulker contains the blocks needed.
                 Helper.HELPER.logDirect("We need " + stacksToLoot + " stacks of: " + closestNeededBlock.toString());
                 curCheckingShulker = null;
-                for (ShulkerInfo curShulker : shulkerList) {
+                for (StorageBoxInfo curShulker : shulkerList) {
                     for (ItemStack stack : curShulker.contents) {
                         if (!(stack.getItem() instanceof BlockItem)) continue;
                         //Gets the block state since you can't use block ids due to blocks having same ids but are different
@@ -447,7 +422,8 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
                                                                 ctx.player().position().z),
                                                         Direction.UP,
                                                         ctx.playerFeet(),
-                                                        false)) {}
+                                                        false)) {
+                                        }
                                 ));
 
                         // Torches can be placed in diff facing directions, so we need this
@@ -463,16 +439,18 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
                     }
                 }
                 if (curCheckingShulker == null) {
-                    Helper.HELPER.logDirect("Shulkers don't have any " + closestNeededBlock);
-                    Helper.HELPER.logDirect("Please refill and restart building");
-                    paused = true;
+                    String log = "Storage don't have any " + closestNeededBlock + "\nPlease refill and restart building";
+                    Helper.HELPER.logDirect(log);
+                    ctx.player().connection.getConnection().disconnect(Component.literal(log));
+                    stop();
+                    // todo delete cache file when since there was a problem with materials
                     return;
                 }
-                currentState = State.PathingToShulker;
+                currentState = State.PathingToStorage;
                 break;
             }
 
-            case PathingToShulker: {
+            case PathingToStorage: {
                 if (baritone.getCustomGoalProcess().isActive()) {
                     return; // Wait to get there
                 }
@@ -485,21 +463,26 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
                 Optional<Rotation> shulkerReachable = RotationUtils.reachable(ctx, curCheckingShulker,
                         ctx.playerController().getBlockReachDistance());
 
+
                 if (shulkerReachable.isPresent()) {
-                    currentState = State.OpeningShulker;
+                    currentState = State.OpeningStorageBox;
                 } else {
-                    baritone.getCustomGoalProcess().setGoalAndPath(new GoalNear(curCheckingShulker, 4));
+                    Helper.HELPER.logDirect("goal is active: " + baritone.getCustomGoalProcess().isActive());
+                    Helper.HELPER.logDirect("who had control last:" + baritone.getPathingControlManager().mostRecentInControl());
+                    baritone.getCustomGoalProcess().setGoalAndPath(new GoalNear(curCheckingShulker, PATHING_RANGE));
+
+
                 }
                 break;
             }
 
-            case OpeningShulker: {
+            case OpeningStorageBox: {
                 if (timer < 10) {
                     return;
                 }
 
                 if (curCheckingShulker == null) {
-                    currentState = State.PathingToShulker;
+                    currentState = State.PathingToStorage;
                     baritone.getInputOverrideHandler().clearAllKeys();
                     return;
                 }
@@ -509,7 +492,7 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
                 shulkerReachable.ifPresent(rotation -> baritone.getLookBehavior().updateTarget(rotation, true));
 
                 if (shulkerReachable.isEmpty()) {
-                    currentState = State.PathingToShulker;
+                    currentState = State.PathingToStorage;
                     return;
                 }
 
@@ -518,18 +501,18 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
                     baritone.getInputOverrideHandler().setInputForceState(Input.CLICK_RIGHT, true);
                     timer = 0;
                 } else {
-                    currentState = State.LootingShulker;
+                    currentState = State.LootingStorageBox;
                 }
                 break;
             }
 
-            case LootingShulker: {
+            case LootingStorageBox: {
                 if (timer < 40) {
                     return;
                 }
 
                 if (!(ctx.player().hasContainerOpen())) {
-                    currentState = State.OpeningShulker;
+                    currentState = State.OpeningStorageBox;
                     return;
                 }
 
@@ -545,15 +528,14 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
                     // Shulker doesn't have what we need, did we accidentally open the wrong one?
                     timer = 0;
                     ctx.player().closeContainer();
-                    currentState = State.PathingToShulker;
+                    currentState = State.PathingToStorage;
                     return;
                 }
 
 
-
                 // Loot shulker and update its contents
                 BlockState itemLooted = lootItemChestSlot(closestNeededBlock);
-                for (ShulkerInfo curShulker : shulkerList) {
+                for (StorageBoxInfo curShulker : shulkerList) {
                     if (curShulker.pos.equals(curCheckingShulker)) {
                         curShulker.contents = getOpenShulkerContents(); // Update the shulker contents
                         if (curShulker.contents == null || curShulker.contents.isEmpty()) {
@@ -593,10 +575,11 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
 
     private boolean isSingleBlockBuild() {
         BlockState firstState = null;
-        for (ShulkerInfo curShulker : shulkerList) {
+        for (StorageBoxInfo curShulker : shulkerList) {
             for (ItemStack stack : curShulker.contents) {
                 if (!(stack.getItem() instanceof BlockItem)) continue;
-                BlockState state = ((BlockItem) stack.getItem()).getBlock().getStateForPlacement(new BlockPlaceContext(new UseOnContext(ctx.world(), ctx.player(), InteractionHand.MAIN_HAND, stack, new BlockHitResult(new Vec3(ctx.player().position().x, ctx.player().position().y, ctx.player().position().z), Direction.UP, ctx.playerFeet(), false)) {}));
+                BlockState state = ((BlockItem) stack.getItem()).getBlock().getStateForPlacement(new BlockPlaceContext(new UseOnContext(ctx.world(), ctx.player(), InteractionHand.MAIN_HAND, stack, new BlockHitResult(new Vec3(ctx.player().position().x, ctx.player().position().y, ctx.player().position().z), Direction.UP, ctx.playerFeet(), false)) {
+                }));
                 if (firstState == null) {
                     firstState = state;
                 } else if (!firstState.equals(state)) {
@@ -609,7 +592,6 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
     }
 
     private BetterBlockPos findPathBackLoc(boolean findFurthest) {
-        // List<BlockPos> set = findInvalidBlocks(); // test bartione's version since we dont have to maintain that and it likely has less bugs
         HashSet<BetterBlockPos> set = baritone.getBuilderProcess().getIncorrectPositions();
         List<BlockPos> validPathBacks = new LinkedList<>();
         Helper.HELPER.logDirect("Found " + set.size() + " invalid locations.");
@@ -677,39 +659,15 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
         return closestPos != null ? new BetterBlockPos(closestPos) : null;
     }
 
-    private List<BlockPos> findInvalidBlocks() {
-        List<BlockPos> invalidPos = new LinkedList<>();
-        for (int y = 0; y < schematic.heightY(); y++) {
-            for (int z = 0; z < schematic.lengthZ(); z++) {
-                for (int x = 0; x < schematic.widthX(); x++) {
-                    int blockX = x + schematicOrigin.getX();
-                    int blockY = y + schematicOrigin.getY();
-                    int blockZ = z + schematicOrigin.getZ();
-                    BlockPos curBlockPos = new BlockPos(blockX, blockY, blockZ);
-                    BlockState current = ctx.world().getBlockState(curBlockPos);
-                    if (!schematic.inSchematic(x, y, z, current)) {
-                        continue;
-                    }
-                    if (ctx.world().isLoaded(curBlockPos)) { // check if its in render distance, not if its in cache
-                        // we can directly observe this block, it is in render distance
-                        if (!current.equals(schematic.desiredState(x, y, z, current, this.allBlocks))) {
-                            invalidPos.add(curBlockPos);
-                        }
-                    }
-                }
-            }
-        }
-        return invalidPos;
-    }
-
     private int getChestSlotCount(BlockState item) {
         int count = 0;
         AbstractContainerMenu curContainer = ctx.player().containerMenu;
-        for (int i = 0; i < inventorySize; i++) {
+        for (int i = 0; i < INVENTORY_SIZE; i++) {
             if (!(curContainer.getSlot(i).getItem().getItem() instanceof BlockItem)) {
                 continue;
             }
-            BlockState state = ((BlockItem) curContainer.getSlot(i).getItem().getItem()).getBlock().getStateForPlacement(new BlockPlaceContext(new UseOnContext(ctx.world(), ctx.player(), InteractionHand.MAIN_HAND, curContainer.getSlot(i).getItem(), new BlockHitResult(new Vec3(ctx.player().position().x, ctx.player().position().y, ctx.player().position().z), Direction.UP, ctx.playerFeet(), false)) {}));
+            BlockState state = ((BlockItem) curContainer.getSlot(i).getItem().getItem()).getBlock().getStateForPlacement(new BlockPlaceContext(new UseOnContext(ctx.world(), ctx.player(), InteractionHand.MAIN_HAND, curContainer.getSlot(i).getItem(), new BlockHitResult(new Vec3(ctx.player().position().x, ctx.player().position().y, ctx.player().position().z), Direction.UP, ctx.playerFeet(), false)) {
+            }));
             if (state.equals(item)) {
                 count++;
             }
@@ -722,7 +680,7 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
     // Otherwise it's the item that got swapped into the chest
     private BlockState lootItemChestSlot(BlockState itemLoot) {
         AbstractContainerMenu curContainer = ctx.player().containerMenu;
-        for (int i = 0; i < inventorySize; i++) { //loops through all slots in shulker box
+        for (int i = 0; i < INVENTORY_SIZE; i++) { //loops through all slots in shulker box
             //checks to see if there are problem items within shulker
             if (curContainer.getSlot(i).getItem().getItem() instanceof AirItem || //empty slots
                     !(curContainer.getSlot(i).getItem().getItem() instanceof BlockItem) ||
@@ -732,7 +690,8 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
 
             BlockState swappedItem = Blocks.AIR.defaultBlockState();
             BlockState state =
-                    ((BlockItem) curContainer.getSlot(i).getItem().getItem()).getBlock().getStateForPlacement(new BlockPlaceContext(new UseOnContext(ctx.world(), ctx.player(), InteractionHand.MAIN_HAND, curContainer.getSlot(i).getItem(), new BlockHitResult(new Vec3(ctx.player().position().x, ctx.player().position().y, ctx.player().position().z), Direction.UP, ctx.playerFeet(), false)) {}));
+                    ((BlockItem) curContainer.getSlot(i).getItem().getItem()).getBlock().getStateForPlacement(new BlockPlaceContext(new UseOnContext(ctx.world(), ctx.player(), InteractionHand.MAIN_HAND, curContainer.getSlot(i).getItem(), new BlockHitResult(new Vec3(ctx.player().position().x, ctx.player().position().y, ctx.player().position().z), Direction.UP, ctx.playerFeet(), false)) {
+                    }));
 
             if (state.equals(itemLoot)) {
                 int swapSlot = getRandomBlockIdSlot();
@@ -745,10 +704,30 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
                             return Blocks.AIR.defaultBlockState();
                         }
                     }
-                    swappedItem = ((BlockItem) ctx.player().getInventory().getItem(swapSlot).getItem()).getBlock().getStateForPlacement(new BlockPlaceContext(new UseOnContext(ctx.world(), ctx.player(), InteractionHand.MAIN_HAND, ctx.player().getInventory().getItem(swapSlot), new BlockHitResult(new Vec3(ctx.player().position().x, ctx.player().position().y, ctx.player().position().z), Direction.UP, ctx.playerFeet(), false)) {}));
-                    ctx.playerController().windowClick(curContainer.containerId, i, 0, ClickType.PICKUP, ctx.player()); // Pickup from chest
-                    ctx.playerController().windowClick(curContainer.containerId, swapSlot < 9 ? swapSlot + 54 : swapSlot + 18, 0, ClickType.PICKUP, ctx.player()); // Have to convert slot id to single chest slot id
-                    ctx.playerController().windowClick(curContainer.containerId, i, 0, ClickType.PICKUP, ctx.player()); // Place back into chest
+                    swappedItem = ((BlockItem) ctx.player().getInventory().getItem(swapSlot).getItem()).getBlock().getStateForPlacement(new BlockPlaceContext(new UseOnContext(ctx.world(), ctx.player(), InteractionHand.MAIN_HAND, ctx.player().getInventory().getItem(swapSlot), new BlockHitResult(new Vec3(ctx.player().position().x, ctx.player().position().y, ctx.player().position().z), Direction.UP, ctx.playerFeet(), false)) {
+                    }));
+
+                    ctx.playerController().windowClick(
+                            curContainer.containerId,
+                            i,
+                            0,
+                            ClickType.PICKUP,
+                            ctx.player()
+                    ); // Pickup from chest
+                    ctx.playerController().windowClick(
+                            curContainer.containerId,
+                            swapSlot < HOT_BAR_SIZE ?
+                                    swapSlot + curContainer.slots.size() - HOT_BAR_SIZE
+                                    : swapSlot + curContainer.slots.size() - TOTAL_INVENTORY_SIZE,
+                            0,
+                            ClickType.PICKUP, ctx.player()
+                    ); // Have to convert slot id to single or double chest slot id
+                    ctx.playerController().windowClick(
+                            curContainer.containerId,
+                            i,
+                            0,
+                            ClickType.PICKUP,
+                            ctx.player()); // Place back into chest
                 } else {
                     // Item exist already or there's an air slot, so we can just do a quick move
                     ctx.playerController().windowClick(curContainer.containerId, i, 0, ClickType.QUICK_MOVE, ctx.player());
@@ -763,7 +742,7 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
     }
 
     private int getRandomBlockIdSlotNoHotbar() {
-        for (int i = totalInventorySize - 1; i >= hotBarSize; i--) {
+        for (int i = TOTAL_INVENTORY_SIZE - 1; i >= HOT_BAR_SIZE; i--) {
             ItemStack stack = ctx.player().getInventory().getItem(i);
             if (stack.getItem() instanceof BlockItem) {
                 return i;
@@ -773,7 +752,7 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
     }
 
     private int getRandomBlockIdSlot() {
-        for (int i = 0; i < totalInventorySize; i++) {
+        for (int i = 0; i < TOTAL_INVENTORY_SIZE; i++) {
             ItemStack stack = ctx.player().getInventory().getItem(i);
             if (stack.getItem() instanceof BlockItem) {
                 return i;
@@ -783,7 +762,7 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
     }
 
     private int getItemSlot(int itemId) {
-        for (int i = 0; i < totalInventorySize; i++) {
+        for (int i = 0; i < TOTAL_INVENTORY_SIZE; i++) {
             ItemStack stack = ctx.player().getInventory().getItem(i);
             if (Item.getId(stack.getItem()) == itemId) {
                 return i;
@@ -937,7 +916,8 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
                                                         ctx.player().position().z),
                                                 Direction.UP,
                                                 ctx.playerFeet(),
-                                                false)) {}));
+                                                false)) {
+                                }));
                 if (state.equals(item)) {
                     count++;
                 }
@@ -950,20 +930,6 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
         return count;
     }
 
-//    private BlockState findMostCommonBlock() {
-//        //use a TreeMap to find what block in the schematic is the most common
-//        TreeMap<Integer, BlockState> blocksInSchematic = new TreeMap<>();
-//
-//        //populate hashmap with blocks from schematic
-//        //TODO add this
-//
-//        //somehow get the highest key value from the treemap
-//        //return that highest key as its BlockState
-//        amountOfMostCommonBlock = blocksInSchematic.lastKey(); //amount of common block
-//        return (BlockState) blocksInSchematic.lastEntry(); //the block itself
-//    }
-
-    //shulker methods
     private List<ItemStack> getOpenShulkerContents() {
         if (!(ctx.player().hasContainerOpen())) {
             return null;
@@ -971,9 +937,8 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
 
         List<ItemStack> shulkerContents = new ArrayList<>();
         AbstractContainerMenu curContainer = ctx.player().containerMenu;
-        for (int i = 0; i < inventorySize; i++) {
+        for (int i = 0; i < INVENTORY_SIZE; i++) {
             if (!(curContainer.getSlot(i).getItem().getItem() instanceof AirItem)) {
-                //int itemId = Item.getId(curContainer.getSlot(i).getItem().getItem());
                 shulkerContents.add(curContainer.getSlot(i).getItem());
             }
         }
@@ -984,7 +949,7 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
     private BetterBlockPos getShulkerToCheck() {
         BetterBlockPos closestPos = null;
         double closestDist = Double.MAX_VALUE;
-        for (ShulkerInfo shulkerInfo : shulkerList) {
+        for (StorageBoxInfo shulkerInfo : shulkerList) {
             if (!shulkerInfo.checked) {
                 double dist = shulkerInfo.pos.distanceTo(ctx.playerFeet());
                 if (dist < closestDist) {
@@ -996,24 +961,62 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
         return closestPos;
     }
 
-    private void populateShulkerInfoList() {
+    private void populateStorageInfoList() {
         shulkerList.clear();
-        List<BetterBlockPos> shulkerBoxes = findShulkerBoxes();
-        for (BetterBlockPos pos : shulkerBoxes) {
-            shulkerList.add(new ShulkerInfo(pos));
+
+        Range<Integer> x = Range.between(Baritone.settings().x1.value, Baritone.settings().x2.value);
+        Range<Integer> y = Range.between(Baritone.settings().y1.value, Baritone.settings().y2.value);
+        Range<Integer> z = Range.between(Baritone.settings().z1.value, Baritone.settings().z2.value);
+        List<BetterBlockPos> shulkerBoxes = findStorageBoxes();
+        for (BetterBlockPos pos : shulkerBoxes) { //
+            if (x.contains(pos.getX()) && y.contains(pos.getY()) && z.contains(pos.getZ())) {
+                Helper.HELPER.logDirect("Shulker found within range" + "\n x: " + pos.x + "\n y: " + pos.y + "\n z: " + pos.z);
+                shulkerList.add(new StorageBoxInfo(pos));
+
+            }
+
         }
     }
 
-    private List<BetterBlockPos> findShulkerBoxes() {
+    private List<BetterBlockPos> findStorageBoxes() {
         List<BetterBlockPos> foundBoxes = new LinkedList<>();
 
         for (TickingBlockEntity tickingBlockEntity : ((ILevel) ctx.world()).getBlockEntityTickers()) {
             BlockEntity blockEntity = ctx.world().getBlockEntity(tickingBlockEntity.getPos());
-            if (blockEntity instanceof ShulkerBoxBlockEntity) {
+            if (blockEntity.getType() == BlockEntityType.CHEST) {
                 foundBoxes.add(new BetterBlockPos(blockEntity.getBlockPos()));
             }
         }
 
         return foundBoxes;
+    }
+
+    private enum State {
+        Nothing,
+
+        Building,
+
+        StorageSearchPathing,
+        StorageSearchOpening,
+        StorageSearchChecking,
+
+        SchematicScanning,
+        PathingToStorage,
+        OpeningStorageBox,
+        LootingStorageBox,
+
+        PathingBack,
+
+        Done,
+    }
+
+    private static class StorageBoxInfo {
+        public BetterBlockPos pos;
+        public List<ItemStack> contents = new ArrayList<>();
+        public boolean checked = false;
+
+        public StorageBoxInfo(BetterBlockPos Pos) {
+            pos = Pos;
+        }
     }
 }

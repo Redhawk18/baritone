@@ -1538,7 +1538,7 @@ public final class Settings {
      * When items flow into a container that is being looted, we will not take any stack that has this amount or lower.
      * If your build environment does not have hoppers refilling boxes, feel free to set to 0.
      */
-    public final Setting<Integer> minimumItemsInAStack = new Setting<>(48);
+    public final Setting<Integer> minimumItemsInAStack = new Setting<>(60);
 
     public final Setting<Integer> x1 = new Setting<>(0);
     public final Setting<Integer> x2 = new Setting<>(0);

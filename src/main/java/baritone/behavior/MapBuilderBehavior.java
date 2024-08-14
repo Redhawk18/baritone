@@ -260,20 +260,16 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
                     currentState = State.Nothing;
                     return;
                 }
-                Helper.HELPER.logDirect("found current shulker: " + curCheckingShulker);
 
+                Helper.HELPER.logDebug("found current shulker: " + curCheckingShulker);
                 Optional<Rotation> shulkerReachable = RotationUtils.reachable(ctx, curCheckingShulker,
                         ctx.playerController().getBlockReachDistance());
-
-                Helper.HELPER.logDirect("Is shulker reachable: " + shulkerReachable.isPresent());
 
                 if (shulkerReachable.isPresent()) {
                     currentState = State.StorageSearchOpening;
                     timer = 0;
                 } else {
                     baritone.getCustomGoalProcess().setGoalAndPath(new GoalNear(curCheckingShulker, PATHING_RANGE));
-//                    Helper.HELPER.logDirect("goal is active: " + baritone.getCustomGoalProcess().isActive());
-//                    Helper.HELPER.logDirect("who had control last:" + baritone.getPathingControlManager().mostRecentInControl());
                 }
                 break;
             }
@@ -366,7 +362,12 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
             }
 
             case SchematicScanning: {
-                closestNeededBlock = findNeededBlockNew();
+                // First we get scaffolding blocks
+                if (!(ctx.player().getInventory().contains(Blocks.COBBLESTONE.asItem().getDefaultInstance()))) {
+                    closestNeededBlock = Blocks.COBBLESTONE.defaultBlockState();
+                } else {
+                    closestNeededBlock = findNeededBlockNew();
+                }
 
                 if (closestNeededBlock == null || closestNeededBlock.getBlock() instanceof AirBlock) {
                     // We probably have everything we need, but baritone is just being retarded
@@ -467,11 +468,7 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
                 if (shulkerReachable.isPresent()) {
                     currentState = State.OpeningStorageBox;
                 } else {
-                    Helper.HELPER.logDirect("goal is active: " + baritone.getCustomGoalProcess().isActive());
-                    Helper.HELPER.logDirect("who had control last:" + baritone.getPathingControlManager().mostRecentInControl());
                     baritone.getCustomGoalProcess().setGoalAndPath(new GoalNear(curCheckingShulker, PATHING_RANGE));
-
-
                 }
                 break;
             }
@@ -785,7 +782,6 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
                     current)) {
                 continue;
             }
-            //Item blockNeeded = Item.getItemFromBlock(schematic.desiredState(pos.x, pos.y, pos.z, current, this.allBlocks).getBlock());
             BlockState desiredState = schematic.desiredState(
                     pos.x - schematicOrigin.getX(),
                     pos.y - schematicOrigin.getY(),
@@ -937,7 +933,7 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
 
         List<ItemStack> shulkerContents = new ArrayList<>();
         AbstractContainerMenu curContainer = ctx.player().containerMenu;
-        for (int i = 0; i < INVENTORY_SIZE; i++) {
+        for (int i = 0; i < curContainer.slots.size(); i++) {
             if (!(curContainer.getSlot(i).getItem().getItem() instanceof AirItem)) {
                 shulkerContents.add(curContainer.getSlot(i).getItem());
             }
@@ -970,7 +966,6 @@ public class MapBuilderBehavior extends Behavior implements IMapBuilderBehavior 
         List<BetterBlockPos> shulkerBoxes = findStorageBoxes();
         for (BetterBlockPos pos : shulkerBoxes) { //
             if (x.contains(pos.getX()) && y.contains(pos.getY()) && z.contains(pos.getZ())) {
-                Helper.HELPER.logDirect("Shulker found within range" + "\n x: " + pos.x + "\n y: " + pos.y + "\n z: " + pos.z);
                 shulkerList.add(new StorageBoxInfo(pos));
 
             }

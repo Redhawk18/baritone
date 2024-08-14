@@ -17,10 +17,7 @@
 
 package baritone.api;
 
-import baritone.api.utils.Helper;
-import baritone.api.utils.NotificationHelper;
-import baritone.api.utils.SettingsUtil;
-import baritone.api.utils.TypeUtils;
+import baritone.api.utils.*;
 import baritone.api.utils.gui.BaritoneToast;
 import net.minecraft.client.GuiMessageTag;
 import net.minecraft.client.Minecraft;
@@ -29,7 +26,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.block.CarpetBlock;
+import net.minecraft.world.level.block.entity.BlockEntityType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -1524,24 +1521,32 @@ public final class Settings {
     /**
      * The max timeout for the build before it gives up on the current state.
      */
-    public Setting<Integer> buildTimer = new Setting<>(800);
+    public final Setting<Integer> buildTimer = new Setting<>(800);
 
     /**
      * The max number of stacks that will be taken when looting.
      */
-    public Setting<Integer> stacksToLoot = new Setting<>(5);
+    public final Setting<Integer> stacksToLoot = new Setting<>(1);
 
     /**
      * The max number of stacks of carpets that will be taken when looting, this overrides `stacksToLoot`.
      * Having this value set higher reduces restocking greatly, which is slow.
      */
-    public Setting<Integer> stacksToLootCarpet = new Setting<>(27);
+    public final Setting<Integer> stacksToLootCarpet = new Setting<>(36);
 
     /**
      * When items flow into a container that is being looted, we will not take any stack that has this amount or lower.
      * If your build environment does not have hoppers refilling boxes, feel free to set to 0.
      */
-    public Setting<Integer> minimumItemsInAStack = new Setting<>(8);
+    public final Setting<Integer> minimumItemsInAStack = new Setting<>(60);
+
+    public final Setting<Integer> x1 = new Setting<>(0);
+    public final Setting<Integer> x2 = new Setting<>(0);
+    public final Setting<Integer> y1 = new Setting<>(120);
+    public final Setting<Integer> y2 = new Setting<>(121);
+    public final Setting<Integer> z1 = new Setting<>(0);
+    public final Setting<Integer> z2 = new Setting<>(0);
+
 
     public final class Setting<T> {
 
